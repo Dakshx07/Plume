@@ -78,7 +78,7 @@ public final class OverlayWindowController: NSWindowController {
 
     // MARK: - Public API
 
-    public func showListening() {
+    public func showListening(isTransform: Bool = false) {
         cancelAutoDismiss()
         currentState = .listening
         wanderController.stopWandering()
@@ -97,7 +97,7 @@ public final class OverlayWindowController: NSWindowController {
             window.orderFrontRegardless()
 
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.22
+                context.duration = 0.18
                 context.timingFunction = CAMediaTimingFunction(controlPoints: 0.16, 1.0, 0.3, 1.0)
                 window.animator().setFrame(finalFrame, display: true)
                 window.animator().alphaValue = 1.0
@@ -105,16 +105,26 @@ public final class OverlayWindowController: NSWindowController {
 
             // Position bot in left slot of pill
             botWindow.positionInsidePill(finalFrame)
-            botWindow.botView.startListeningGestures()
+            if isTransform {
+                botWindow.botView.setExpression(.curious, animated: true)
+                botWindow.botView.setRotation(degrees: -6.0, animated: true)
+            } else {
+                botWindow.botView.startListeningGestures()
+            }
         } else {
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.16
+                context.duration = 0.14
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 window.animator().setFrame(finalFrame, display: true)
                 window.animator().alphaValue = 1.0
             }
             botWindow.positionInsidePill(finalFrame)
-            botWindow.botView.startListeningGestures()
+            if isTransform {
+                botWindow.botView.setExpression(.curious, animated: true)
+                botWindow.botView.setRotation(degrees: -6.0, animated: true)
+            } else {
+                botWindow.botView.startListeningGestures()
+            }
         }
     }
 
@@ -125,60 +135,28 @@ public final class OverlayWindowController: NSWindowController {
         }
     }
 
-    /// When speech ends: Waveform collapses, pill shrinks, and Flow the Bot pops out to wander
+    /// When speech ends: Waveform collapses, and Flow the Bot takes the full 126pt pill stage as its playground!
     public func startProcessing() {
         guard currentState == .listening else { return }
         currentState = .processing
 
         botWindow.botView.stopListeningGestures()
         waveformView.collapseBars()
-        botWindow.pop()
 
-        guard let window = self.window else { return }
-
-        // Smoothly shrink pill to a compact 56pt pebble
-        let shrinkFrame = targetFrame(width: pillWidthProcessing, offsetY: 0)
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.25
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            window.animator().setFrame(shrinkFrame, display: true)
-        }
-
-        // Launch bot upward out of the pill
-        let pillFrame = window.frame
-        let escapePoint = NSPoint(
-            x: pillFrame.origin.x + (pillFrame.width / 2.0) - (BotWindow.windowSize / 2.0) + CGFloat.random(in: -15...15),
-            y: pillFrame.origin.y + pillFrame.height + 22.0
-        )
-
-        botWindow.move(to: escapePoint, duration: 0.32, timing: CAMediaTimingFunction(controlPoints: 0.2, 1.0, 0.3, 1.0)) { [weak self] in
-            self?.wanderController.startWandering()
-        }
+        // Keep pill at full width, launch bot into in-pill playground
+        wanderController.startWandering()
     }
 
-    /// When transcription and cleanup complete: Flow the Bot scurries back to the pill, squishes, and smiles happy eyes!
+    /// When transcription and cleanup complete: Flow the Bot scurries back to the left slot, squishes, and smiles happy eyes!
     public func finishSuccess(completion: (() -> Void)? = nil) {
         currentState = .success
         cancelAutoDismiss()
         botWindow.botView.stopListeningGestures()
 
-        guard let window = self.window else {
-            completion?()
-            return
-        }
-
-        // Expand pill back to full width for arrival
-        let fullFrame = targetFrame(width: pillWidthListening, offsetY: 0)
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.22
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            window.animator().setFrame(fullFrame, display: true)
-        }
-
         wanderController.returnToPill { [weak self] in
             completion?()
-            // Celebrate for 1.2 seconds, then smoothly fade out
-            self?.autoDismissTimer = Timer.scheduledTimer(withTimeInterval: 1.2, repeats: false) { [weak self] _ in
+            // Celebrate for 1.0 second, then smoothly fade out
+            self?.autoDismissTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [weak self] _ in
                 self?.hide()
             }
         }

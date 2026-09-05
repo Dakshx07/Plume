@@ -94,6 +94,7 @@ public final class BotView: NSView {
     private var currentBobY: CGFloat = 0.0
     private var targetBobY: CGFloat = 0.0
     private var speechPhase: CGFloat = 0.0
+    private var isSpinning = false
 
     // Breathing & eye movement
     private var breathingPhase: CGFloat = 0
@@ -194,6 +195,15 @@ public final class BotView: NSView {
             currentBobY = y
             targetBobY = y
         }
+    }
+
+    public func startSpinning() {
+        isSpinning = true
+    }
+
+    public func stopSpinning() {
+        isSpinning = false
+        targetRotation = 0.0
     }
 
     // MARK: - In-Place Gesture Cycle During Listening
@@ -368,8 +378,16 @@ public final class BotView: NSView {
         currentScaleX = currentScaleX * 0.82 + targetScaleX * 0.18
         currentScaleY = currentScaleY * 0.82 + targetScaleY * 0.18
 
-        // Smooth lerp for in-place gestures
-        currentRotation = currentRotation * 0.84 + targetRotation * 0.16
+        // Smooth lerp for in-place gestures or continuous spin
+        if isSpinning {
+            currentRotation += 0.18
+            if currentRotation > .pi * 200.0 {
+                currentRotation = 0.0
+            }
+            targetRotation = currentRotation
+        } else {
+            currentRotation = currentRotation * 0.84 + targetRotation * 0.16
+        }
         currentBobY = currentBobY * 0.78 + targetBobY * 0.22
 
         needsDisplay = true

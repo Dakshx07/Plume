@@ -3,9 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.voiceflow.VoiceFlow</string>
+    <string>com.dakshhiran.Plume</string>
     <key>CFBundleName</key>
-    <string>VoiceFlow</string>
+    <string>Plume</string>
+    <key>CFBundleExecutable</key>
+    <string>Plume</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -17,6 +19,6 @@
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>VoiceFlow needs microphone access to transcribe your speech.</string>
+    <string>Plume needs microphone access to transcribe your speech.</string>
 </dict>
 </plist>

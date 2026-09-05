@@ -159,6 +159,67 @@ public final class GeminiClient {
         }
     }
 
+    // MARK: - Process Transformation (Feature 1 & Feature 6)
+
+    public func transformText(
+        contextText: String,
+        instruction: String,
+        fallbackNotifier: ((GeminiFallbackReason) -> Void)? = nil
+    ) async -> String {
+        let key = Config.geminiAPIKey
+        guard !key.isEmpty else {
+            logger.warning("Gemini API key is not set. Using original text fallback.")
+            fallbackNotifier?(.keyNotSet)
+            return contextText
+        }
+
+        let prompt = """
+        You are an intelligent in-place text transformation assistant for macOS.
+        The user provided the following text and spoke a voice instruction to transform it.
+
+        [Original Text]:
+        \"\"\"
+        \(contextText)
+        \"\"\"
+
+        [User Voice Instruction]:
+        \"\"\"
+        \(instruction)
+        \"\"\"
+
+        Rules:
+        1. Execute the user's instruction precisely on the original text (e.g., rewrite, reformat, summarize, translate, fix grammar, convert data formats, write code, etc.).
+        2. Output ONLY the transformed text replacement.
+        3. Do NOT include any chatty phrases like "Here is the rewritten text:", "Sure!", or explanation notes.
+        4. Output only the final replacement text directly.
+        """
+
+        do {
+            let resultText = try await callGemini(prompt: prompt, apiKey: key)
+            let cleaned = stripMarkdownWrappers(resultText)
+            if cleaned.isEmpty {
+                fallbackNotifier?(.emptyResponse)
+                return contextText
+            }
+            return cleaned
+        } catch let error as GeminiError {
+            switch error {
+            case .unauthorized:
+                fallbackNotifier?(.unauthorized)
+            case .rateLimited:
+                fallbackNotifier?(.rateLimited)
+            case .emptyResponse:
+                fallbackNotifier?(.emptyResponse)
+            case .networkError(let msg):
+                fallbackNotifier?(.networkError(msg))
+            }
+            return contextText
+        } catch {
+            fallbackNotifier?(.networkError(error.localizedDescription))
+            return contextText
+        }
+    }
+
     // MARK: - Gemini API Call
 
     private enum GeminiError: Error {
@@ -169,7 +230,7 @@ public final class GeminiClient {
     }
 
     private func callGemini(prompt: String, apiKey: String) async throws -> String {
-        let candidateModels = ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-1.5-flash"]
+        let candidateModels = ["gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemini-flash-latest", "gemini-3.5-flash-lite"]
 
         for (index, model) in candidateModels.enumerated() {
             guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)") else {

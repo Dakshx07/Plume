@@ -3,9 +3,14 @@ import CoreGraphics
 import QuartzCore
 import os.log
 
+public enum HotkeyAction {
+    case dictate          // Option + Space
+    case transform        // Shift + Option + Space
+}
+
 @MainActor
 public protocol HotkeyManagerDelegate: AnyObject {
-    func hotkeyManagerDidTriggerToggle(_ manager: HotkeyManager)
+    func hotkeyManagerDidTriggerAction(_ manager: HotkeyManager, action: HotkeyAction)
 }
 
 public final class HotkeyManager: @unchecked Sendable {
@@ -14,9 +19,6 @@ public final class HotkeyManager: @unchecked Sendable {
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-
-    private var keyDownTimestamp: TimeInterval = 0
-    private var isTrackingPotentialTap = false
     private var lastToggleTime: TimeInterval = 0
 
     public var isEnabled: Bool = true
@@ -72,7 +74,6 @@ public final class HotkeyManager: @unchecked Sendable {
     }
 
     private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        // Handle system disabling the tap due to timeout or user input lag
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             logger.warning("CGEventTap disabled by system (type \(type.rawValue)). Re-enabling.")
             if let tap = eventTap {
@@ -88,45 +89,39 @@ public final class HotkeyManager: @unchecked Sendable {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let flags = event.flags
 
-        // Check for Option key (maskAlternate) and Space (code 49)
         let isSpace = (keyCode == Config.Hotkey.spaceKeyCode)
         let hasOption = flags.contains(.maskAlternate)
+        let hasShift = flags.contains(.maskShift)
+        let hasCmd = flags.contains(.maskCommand)
+        let hasControl = flags.contains(.maskControl)
+
+        // Ignore if Command or Control is held
+        guard !hasCmd && !hasControl else {
+            return Unmanaged.passUnretained(event)
+        }
 
         let now = CACurrentMediaTime()
 
         if type == .keyDown {
             if isSpace && hasOption {
-                // Potential tap started
-                keyDownTimestamp = now
-                isTrackingPotentialTap = true
-                // Swallow keyDown so space isn't typed
-                return nil
-            } else {
-                // Different key pressed while tracking
-                if isTrackingPotentialTap && !isSpace {
-                    isTrackingPotentialTap = false
+                // Immediate keyDown trigger with debounce
+                if now - lastToggleTime >= Config.Hotkey.debounceIntervalSeconds {
+                    lastToggleTime = now
+                    let action: HotkeyAction = hasShift ? .transform : .dictate
+                    logger.info("Instant hotkey trigger detected: \(String(describing: action))")
+
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
+                        self.delegate?.hotkeyManagerDidTriggerAction(self, action: action)
+                    }
                 }
+                // Swallow space keydown
+                return nil
             }
         } else if type == .keyUp {
-            if isSpace && isTrackingPotentialTap {
-                isTrackingPotentialTap = false
-                let tapDuration = now - keyDownTimestamp
-
-                // Within 500ms is considered a tap
-                if tapDuration <= Config.Hotkey.maxTapDurationSeconds {
-                    // Debounce check (300ms)
-                    if now - lastToggleTime >= Config.Hotkey.debounceIntervalSeconds {
-                        lastToggleTime = now
-                        logger.info("Option+Space hotkey tap detected (duration: \(String(format: "%.2f", tapDuration * 1000))ms).")
-
-                        DispatchQueue.main.async { [weak self] in
-                            guard let self = self else { return }
-                            self.delegate?.hotkeyManagerDidTriggerToggle(self)
-                        }
-                    }
-                    // Swallow keyUp
-                    return nil
-                }
+            if isSpace && hasOption {
+                // Swallow space keyup
+                return nil
             }
         }
 

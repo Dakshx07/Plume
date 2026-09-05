@@ -3,11 +3,11 @@ import os.log
 
 public enum Config {
     // MARK: - App Identity
-    public static let appName = "VoiceFlow"
-    public static let bundleIdentifier = "com.voiceflow.VoiceFlow"
+    public static let appName = "Plume"
+    public static let bundleIdentifier = "com.dakshhiran.Plume"
 
     // MARK: - Logger
-    public static let logger = Logger(subsystem: "com.voiceflow", category: "App")
+    public static let logger = Logger(subsystem: "com.dakshhiran.plume", category: "App")
 
     // MARK: - UserDefaults Keys
     public enum Keys {
@@ -68,6 +68,10 @@ public enum Config {
 
     public static var whisperModelPath: String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let basePath = "\(home)/.voiceflow/models/ggml-base.en.bin"
+        if FileManager.default.fileExists(atPath: basePath) {
+            return basePath
+        }
         return "\(home)/.voiceflow/models/ggml-large-v3-turbo.bin"
     }
 
@@ -85,15 +89,14 @@ public enum Config {
         public static let channelCount: UInt32 = 1
         public static let silenceThresholdDB: Float = -35.0
         public static let silenceDurationSeconds: TimeInterval = 2.0
-        public static let minRecordingDurationSeconds: TimeInterval = 1.0
+        public static let minRecordingDurationSeconds: TimeInterval = 0.5
         public static let maxRecordingDurationSeconds: TimeInterval = 120.0
     }
 
     // MARK: - Hotkey Configuration
     public enum Hotkey {
         public static let spaceKeyCode: UInt16 = 49
-        public static let maxTapDurationSeconds: TimeInterval = 0.50
-        public static let debounceIntervalSeconds: TimeInterval = 0.30
+        public static let debounceIntervalSeconds: TimeInterval = 0.22
     }
 }
 

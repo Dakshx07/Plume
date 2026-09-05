@@ -49,11 +49,36 @@ public final class AudioRecorder: NSObject, @unchecked Sendable {
     public override init() {
         super.init()
         setupNotificationObservers()
+        prewarm()
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
         stopRecording()
+    }
+
+    // MARK: - Pre-Warming Engine (Sub-Millisecond Startup)
+
+    public func prewarm() {
+        processingQueue.async { [weak self] in
+            guard let self = self, self.audioEngine == nil else { return }
+            _ = self.getOrInitEngine()
+        }
+    }
+
+    private func getOrInitEngine() -> AVAudioEngine {
+        if let existing = self.audioEngine {
+            return existing
+        }
+        let engine = AVAudioEngine()
+        do {
+            try engine.inputNode.setVoiceProcessingEnabled(true)
+            logger.info("Voice processing pre-warmed successfully.")
+        } catch {
+            logger.warning("Voice processing setup note: \(error.localizedDescription)")
+        }
+        self.audioEngine = engine
+        return engine
     }
 
     private func setupNotificationObservers() {
@@ -87,16 +112,8 @@ public final class AudioRecorder: NSObject, @unchecked Sendable {
             throw AudioRecorderError.microphoneNotAuthorized
         }
 
-        let engine = AVAudioEngine()
+        let engine = getOrInitEngine()
         let inputNode = engine.inputNode
-
-        // 2. Enable voice processing (echo cancellation, noise suppression, AGC)
-        do {
-            try inputNode.setVoiceProcessingEnabled(true)
-            logger.info("Voice processing enabled successfully.")
-        } catch {
-            logger.warning("Failed to enable voice processing: \(error.localizedDescription). Continuing with raw audio.")
-        }
 
         // 3. Apple's built-in VAD (macOS 14+)
         #if compiler(>=5.9)
@@ -294,7 +311,6 @@ public final class AudioRecorder: NSObject, @unchecked Sendable {
         // Wait synchronously for all queued buffers to finish writing before closing audioFile
         processingQueue.sync {
             self.audioFile = nil // Closes file and writes valid RIFF WAV header with exact audio length
-            self.audioEngine = nil
             self.audioConverter = nil
             self.targetFormat = nil
         }

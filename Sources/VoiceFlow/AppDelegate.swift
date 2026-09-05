@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import UserNotifications
 import os.log
 
 public enum AppState {
@@ -11,19 +12,27 @@ public enum AppState {
     case error
 }
 
+public enum SessionMode {
+    case dictate
+    case transform(contextText: String, isClipboard: Bool)
+}
+
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDelegate, AudioRecorderDelegate {
     public static let shared = AppDelegate()
 
     private let logger = Config.logger
     private var statusItem: NSStatusItem!
-    private var statusMenuItem: NSMenuItem!
+    private var miniBotView: BotView?
+    private var menuStatusBadge: NSTextField?
+    private var menuRecordItem: NSMenuItem?
 
     private let audioRecorder = AudioRecorder()
     private let transcriber = WhisperTranscriber()
     private let hotkeyManager = HotkeyManager()
 
     private(set) public var state: AppState = .idle
+    private var sessionMode: SessionMode = .dictate
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
@@ -34,7 +43,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
 
         checkPrerequisites()
 
-        logger.info("VoiceFlow launched successfully.")
+        logger.info("Plume launched successfully.")
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
@@ -43,19 +52,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         audioRecorder.cleanup()
     }
 
-    private var menuStatusBadge: NSTextField?
-    private var menuRecordItem: NSMenuItem?
-
-    // MARK: - Menu Bar Setup
+    // MARK: - Menu Bar Setup (Flow the Bot Living Status Item)
 
     private func setupMenuBar() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: 28.0)
 
         if let button = statusItem.button {
-            let img = NSImage(systemSymbolName: "waveform.badge.mic", accessibilityDescription: "VoiceFlow")
-            img?.isTemplate = true
-            button.image = img
-            button.imagePosition = .imageOnly
+            button.subviews.forEach { $0.removeFromSuperview() }
+            let miniBot = BotView(frame: NSRect(x: 4, y: 1, width: 20, height: 20))
+            button.addSubview(miniBot)
+            self.miniBotView = miniBot
         }
 
         let menu = NSMenu()
@@ -68,11 +74,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         menu.addItem(NSMenuItem.separator())
 
         // 2. Start / Stop Recording action item
-        let recordItem = NSMenuItem(title: "Start Recording (⌥ Space)", action: #selector(toggleRecordingFromMenu), keyEquivalent: "")
+        let recordItem = NSMenuItem(title: "Dictate (⌥ Space)", action: #selector(toggleRecordingFromMenu), keyEquivalent: "")
         recordItem.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Record")
         recordItem.target = self
         menu.addItem(recordItem)
         self.menuRecordItem = recordItem
+
+        let transformItem = NSMenuItem(title: "Transform Selection (⇧ ⌥ Space)", action: #selector(toggleTransformFromMenu), keyEquivalent: "")
+        transformItem.image = NSImage(systemSymbolName: "wand.and.stars", accessibilityDescription: "Transform")
+        transformItem.target = self
+        menu.addItem(transformItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -90,12 +101,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         menu.addItem(NSMenuItem.separator())
 
         // 4. About & Quit
-        let aboutItem = NSMenuItem(title: "About VoiceFlow", action: #selector(showAbout), keyEquivalent: "")
+        let aboutItem = NSMenuItem(title: "About Plume", action: #selector(showAbout), keyEquivalent: "")
         aboutItem.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: "About")
         aboutItem.target = self
         menu.addItem(aboutItem)
 
-        let quitItem = NSMenuItem(title: "Quit VoiceFlow", action: #selector(quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit Plume", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.image = NSImage(systemSymbolName: "power", accessibilityDescription: "Quit")
         quitItem.target = self
         menu.addItem(quitItem)
@@ -107,11 +118,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 232, height: 50))
 
         let iconView = NSImageView(frame: NSRect(x: 14, y: 11, width: 28, height: 28))
-        iconView.image = NSImage(systemSymbolName: "waveform.badge.mic", accessibilityDescription: "VoiceFlow")
+        iconView.image = NSImage(systemSymbolName: "waveform.badge.mic", accessibilityDescription: "Plume")
         iconView.contentTintColor = .labelColor
         view.addSubview(iconView)
 
-        let titleLabel = NSTextField(labelWithString: "VoiceFlow")
+        let titleLabel = NSTextField(labelWithString: "Plume")
         titleLabel.font = NSFont.systemFont(ofSize: 13, weight: .bold)
         titleLabel.frame = NSRect(x: 50, y: 26, width: 90, height: 18)
         view.addSubview(titleLabel)
@@ -138,31 +149,52 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
     }
 
     @objc private func toggleRecordingFromMenu() {
-        hotkeyManagerDidTriggerToggle(hotkeyManager)
+        if state == .idle {
+            startSession(action: .dictate)
+        } else if state == .recording {
+            stopRecordingAndTranscribe()
+        }
+    }
+
+    @objc private func toggleTransformFromMenu() {
+        if state == .idle {
+            startSession(action: .transform)
+        } else if state == .recording {
+            stopRecordingAndTranscribe()
+        }
     }
 
     private func updateMenuStatus(text: String, isRecording: Bool = false) {
-        if let button = statusItem.button {
-            if isRecording {
-                let config = NSImage.SymbolConfiguration(paletteColors: [.systemRed])
-                button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "VoiceFlow Recording")?.withSymbolConfiguration(config)
-            } else {
-                let img = NSImage(systemSymbolName: "waveform.badge.mic", accessibilityDescription: "VoiceFlow")
-                img?.isTemplate = true
-                button.image = img
-            }
-        }
-
         if isRecording {
+            miniBotView?.setExpression(.amazed, animated: true)
+            miniBotView?.stopSpinning()
             menuStatusBadge?.stringValue = "● Recording"
             menuStatusBadge?.textColor = .systemRed
             menuRecordItem?.title = "Stop Recording"
             menuRecordItem?.image = NSImage(systemSymbolName: "stop.circle.fill", accessibilityDescription: "Stop")
         } else {
-            menuStatusBadge?.stringValue = "● Ready"
-            menuStatusBadge?.textColor = NSColor(calibratedRed: 0.16, green: 0.78, blue: 0.35, alpha: 1.0)
-            menuRecordItem?.title = "Start Recording (⌥ Space)"
+            menuRecordItem?.title = "Dictate (⌥ Space)"
             menuRecordItem?.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Record")
+
+            switch state {
+            case .idle:
+                miniBotView?.stopSpinning()
+                miniBotView?.setExpression(.attentive, animated: true)
+                menuStatusBadge?.stringValue = "● Ready"
+                menuStatusBadge?.textColor = NSColor(calibratedRed: 0.16, green: 0.78, blue: 0.35, alpha: 1.0)
+            case .transcribing, .processing, .saving:
+                miniBotView?.setExpression(.thinking, animated: true)
+                miniBotView?.startSpinning()
+                menuStatusBadge?.stringValue = "● Processing..."
+                menuStatusBadge?.textColor = .systemOrange
+            case .error:
+                miniBotView?.stopSpinning()
+                miniBotView?.setExpression(.surprised, animated: true)
+                menuStatusBadge?.stringValue = "● Error"
+                menuStatusBadge?.textColor = .systemRed
+            default:
+                break
+            }
         }
     }
 
@@ -170,12 +202,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
 
     private func setupAudioRecorder() {
         audioRecorder.delegate = self
+        audioRecorder.prewarm()
     }
 
     private func setupHotkey() {
         hotkeyManager.delegate = self
-        // Delay 1.5 seconds to let system initialize before starting event tap
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+        // Delay 1.0 second to let system initialize before starting event tap
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             self?.hotkeyManager.start()
         }
     }
@@ -205,10 +238,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
 
     // MARK: - HotkeyManagerDelegate
 
-    public func hotkeyManagerDidTriggerToggle(_ manager: HotkeyManager) {
+    public func hotkeyManagerDidTriggerAction(_ manager: HotkeyManager, action: HotkeyAction) {
         switch state {
         case .idle:
-            startRecordingSession()
+            startSession(action: action)
         case .recording:
             stopRecordingAndTranscribe()
         case .transcribing, .processing, .saving, .error:
@@ -218,19 +251,42 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
 
     // MARK: - Recording Flow
 
-    private func startRecordingSession() {
+    private func startSession(action: HotkeyAction) {
         guard state == .idle else { return }
 
-        // Check microphone permission
+        // Check for Selection / Clipboard mode
+        var mode: SessionMode = .dictate
+        if action == .transform {
+            if let selected = Permissions.shared.captureSelectedText() {
+                mode = .transform(contextText: selected, isClipboard: false)
+            } else if let clip = Permissions.shared.captureClipboardText() {
+                mode = .transform(contextText: clip, isClipboard: true)
+            }
+        } else {
+            // Option+Space: If user already highlighted text in active app, auto-transform it!
+            if let selected = Permissions.shared.captureSelectedText() {
+                mode = .transform(contextText: selected, isClipboard: false)
+            }
+        }
+        self.sessionMode = mode
+
+        let isTransform: Bool
+        switch mode {
+        case .transform: isTransform = true
+        case .dictate: isTransform = false
+        }
+
+        // 1. Show UI INSTANTLY (< 15ms)
+        OverlayWindowController.shared.showListening(isTransform: isTransform)
+        state = .recording
+        updateMenuStatus(text: "Status: 🔴 Recording...", isRecording: true)
+
+        // 2. Start audio capture (engine is already pre-warmed)
         guard Permissions.shared.isMicrophoneGranted else {
             Permissions.shared.requestMicrophone { [weak self] granted in
                 guard let self = self else { return }
                 if !granted {
                     self.showOverlayError("Microphone permission needed")
-                    self.showNotification(
-                        title: "Microphone Access Required",
-                        message: "Please allow microphone access in System Settings for VoiceFlow."
-                    )
                 }
             }
             return
@@ -238,9 +294,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
 
         do {
             try audioRecorder.startRecording()
-            state = .recording
-            updateMenuStatus(text: "Status: 🔴 Recording...", isRecording: true)
-            OverlayWindowController.shared.showListening()
         } catch {
             logger.error("Failed to start recording: \(error.localizedDescription)")
             showOverlayError(error.localizedDescription)
@@ -252,7 +305,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
 
         state = .transcribing
         updateMenuStatus(text: "Status: Finishing...", isRecording: false)
-        // Flow the Bot pops out of the pill and starts wandering!
+        // Flow the Bot takes the full pill stage and begins its in-pill playground!
         OverlayWindowController.shared.startProcessing()
 
         guard let wavURL = audioRecorder.stopRecording() else {
@@ -283,14 +336,48 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
     // MARK: - AI & Output Handling
 
     private func handleTranscriptionResult(_ transcript: String) async {
-        logger.info("Transcription completed successfully.")
+        logger.info("Transcription completed successfully: \(transcript)")
 
-        let isNotion = GeminiClient.shared.isNotionTrigger(in: transcript)
+        switch sessionMode {
+        case .transform(let contextText, let isClipboard):
+            await handleTransformFlow(contextText: contextText, instruction: transcript, isClipboard: isClipboard)
+        case .dictate:
+            let isNotion = GeminiClient.shared.isNotionTrigger(in: transcript)
+            if isNotion {
+                await handleNotionFlow(transcript: transcript)
+            } else {
+                await handleDictationFlow(transcript: transcript)
+            }
+        }
+    }
 
-        if isNotion {
-            await handleNotionFlow(transcript: transcript)
-        } else {
-            await handleDictationFlow(transcript: transcript)
+    private func handleTransformFlow(contextText: String, instruction: String, isClipboard: Bool) async {
+        await MainActor.run {
+            self.state = .processing
+            self.updateMenuStatus(text: "Status: Transforming...")
+        }
+
+        let transformed = await GeminiClient.shared.transformText(contextText: contextText, instruction: instruction)
+
+        await MainActor.run {
+            if isClipboard {
+                // Update system clipboard
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(transformed, forType: .string)
+            }
+
+            // Replace selected text in place (or paste transformed clipboard)
+            Permissions.shared.replaceSelectedText(transformed) { [weak self] success in
+                guard let self = self else { return }
+                if success {
+                    OverlayWindowController.shared.finishSuccess {
+                        self.resetToIdleAfterDelay(1.0)
+                    }
+                } else {
+                    OverlayWindowController.shared.showError("Transform insertion failed")
+                    self.resetToIdleAfterDelay(0.8)
+                }
+            }
         }
     }
 
@@ -319,7 +406,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
 
         if let notice = fallbackNotice {
             await MainActor.run {
-                self.showNotification(title: "VoiceFlow", message: notice)
+                self.showNotification(title: "Plume", message: notice)
             }
         }
 
@@ -328,7 +415,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
                 guard let self = self else { return }
                 if success {
                     OverlayWindowController.shared.finishSuccess {
-                        self.resetToIdleAfterDelay(1.2)
+                        self.resetToIdleAfterDelay(1.0)
                     }
                 } else {
                     OverlayWindowController.shared.showError("Insertion failed")
@@ -362,7 +449,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
             await MainActor.run {
                 self.showNotification(title: "Saved to Notion", message: note.title)
                 OverlayWindowController.shared.finishSuccess {
-                    self.resetToIdleAfterDelay(1.2)
+                    self.resetToIdleAfterDelay(1.0)
                 }
             }
         } catch {
@@ -370,30 +457,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
                 self.logger.error("Notion save failed: \(error.localizedDescription). Falling back to typing text.")
                 self.showNotification(
                     title: "Notion Save Failed",
-                    message: "\(error.localizedDescription) — Typed text into active app."
+                    message: "\(error.localizedDescription). Typed text instead."
                 )
-                Permissions.shared.insertText("\(note.title)\n\n\(note.content)")
-                OverlayWindowController.shared.finishSuccess {
-                    self.resetToIdleAfterDelay(1.2)
-                }
             }
-        }
-    }
-
-    // MARK: - State Resets & Overlays
-
-    private func showOverlayError(_ message: String) {
-        state = .error
-        updateMenuStatus(text: "Status: Error")
-        OverlayWindowController.shared.showError(message)
-        resetToIdleAfterDelay(0.8)
-    }
-
-    private func resetToIdleAfterDelay(_ seconds: TimeInterval) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
-            guard let self = self else { return }
-            self.state = .idle
-            self.updateMenuStatus(text: "Status: Ready")
+            await handleDictationFlow(transcript: transcript)
         }
     }
 
@@ -404,21 +471,45 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
     }
 
     public func audioRecorderDidDetectSilence(_ recorder: AudioRecorder) {
-        guard self.state == .recording else { return }
-        self.logger.info("AudioRecorder detected silence. Auto-stopping recording.")
-        self.stopRecordingAndTranscribe()
+        logger.info("AudioRecorder detected silence. Auto-stopping session.")
+        stopRecordingAndTranscribe()
     }
 
     public func audioRecorderDidReachMaxDuration(_ recorder: AudioRecorder) {
-        guard self.state == .recording else { return }
-        self.logger.info("AudioRecorder reached max duration. Stopping recording.")
-        self.stopRecordingAndTranscribe()
+        logger.info("AudioRecorder reached max duration. Stopping session.")
+        stopRecordingAndTranscribe()
     }
 
     public func audioRecorder(_ recorder: AudioRecorder, didFailWithError error: Error) {
-        self.logger.error("Audio recording failed with error: \(error.localizedDescription)")
-        self.audioRecorder.stopRecording()
-        self.showOverlayError(error.localizedDescription)
+        logger.error("AudioRecorder failed: \(error.localizedDescription)")
+        showOverlayError(error.localizedDescription)
+    }
+
+    // MARK: - Error & Notification Helpers
+
+    private func showOverlayError(_ message: String) {
+        state = .error
+        updateMenuStatus(text: "Status: Error")
+        OverlayWindowController.shared.showError(message)
+        resetToIdleAfterDelay(2.0)
+    }
+
+    private func resetToIdleAfterDelay(_ delay: TimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self = self else { return }
+            self.state = .idle
+            self.sessionMode = .dictate
+            self.updateMenuStatus(text: "Status: Ready")
+        }
+    }
+
+    public func showNotification(title: String, message: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = message
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
     }
 
     // MARK: - Menu Actions
@@ -428,22 +519,39 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
     }
 
     @objc private func checkPermissions() {
-        SettingsWindowController.shared.showWindow(nil)
-        SettingsWindowController.shared.updatePermissionsStatus()
+        let mic = Permissions.shared.isMicrophoneGranted ? "✓ Granted" : "✗ Missing"
+        let acc = Permissions.shared.isAccessibilityGranted ? "✓ Granted" : "✗ Missing"
+        let inp = Permissions.shared.isInputMonitoringGranted ? "✓ Granted" : "✗ Missing"
+
+        let message = """
+        Microphone: \(mic)
+        Accessibility: \(acc)
+        Input Monitoring: \(inp)
+        """
+
+        let alert = NSAlert()
+        alert.messageText = "Plume Permissions"
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Open Settings")
+
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
+            openSettings()
+        }
     }
 
     @objc private func showAbout() {
         let alert = NSAlert()
-        alert.messageText = "About VoiceFlow"
+        alert.messageText = "About Plume"
         alert.informativeText = """
-        VoiceFlow is a fast, offline-first voice dictation tool for macOS.
+        Plume v1.0.0
+        The living, lightning-fast voice dictation and in-place AI editing engine for macOS.
 
-        • Option + Space: Tap to start / stop recording
-        • Local speech-to-text via whisper.cpp
-        • Cloud Hinglish cleanup via Gemini 2.0 Flash
-        • Direct saving to Notion
-
-        Version 1.0.0
+        Shortcuts:
+        • ⌥ Space: Dictate
+        • ⇧ ⌥ Space: In-Place Transform Selection / Clipboard
         """
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
@@ -452,20 +560,5 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
 
     @objc private func quitApp() {
         NSApplication.shared.terminate(nil)
-    }
-
-    // MARK: - Notifications
-
-    public func showNotification(title: String, message: String) {
-        let escapedTitle = title.replacingOccurrences(of: "\"", with: "\\\"")
-        let escapedMsg = message.replacingOccurrences(of: "\"", with: "\\\"")
-
-        let script = "display notification \"\(escapedMsg)\" with title \"\(escapedTitle)\" sound name \"default\""
-        DispatchQueue.global(qos: .utility).async {
-            if let appleScript = NSAppleScript(source: script) {
-                var error: NSDictionary?
-                appleScript.executeAndReturnError(&error)
-            }
-        }
     }
 }

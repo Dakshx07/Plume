@@ -254,4 +254,77 @@ public final class Permissions {
         }
         return true
     }
+
+    // MARK: - Selected Text & Clipboard Capture (Feature 1 & Feature 6)
+
+    public func captureSelectedText() -> String? {
+        // Method 1: Accessibility API on focused element (direct, zero clipboard side effects)
+        let systemWide = AXUIElementCreateSystemWide()
+        var focusedElementValue: AnyObject?
+        let axResult = AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focusedElementValue)
+        if axResult == .success, let focusedElement = focusedElementValue {
+            var selectedTextValue: AnyObject?
+            let textResult = AXUIElementCopyAttributeValue(focusedElement as! AXUIElement, kAXSelectedTextAttribute as CFString, &selectedTextValue)
+            if textResult == .success, let selectedString = selectedTextValue as? String {
+                let trimmed = selectedString.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    logger.info("Captured selected text via Accessibility API (\(trimmed.count) chars).")
+                    return trimmed
+                }
+            }
+        }
+
+        // Method 2: Synthetic Cmd+C snapshot (universal fallback for VS Code, Chrome, Electron)
+        let pasteboard = NSPasteboard.general
+        let initialChangeCount = pasteboard.changeCount
+
+        let src = CGEventSource(stateID: .combinedSessionState)
+        let cKeyCode: CGKeyCode = 8 // 'c'
+        let cmdKeyCode: CGKeyCode = 55 // command
+
+        guard let cmdDown = CGEvent(keyboardEventSource: src, virtualKey: cmdKeyCode, keyDown: true),
+              let cDown = CGEvent(keyboardEventSource: src, virtualKey: cKeyCode, keyDown: true),
+              let cUp = CGEvent(keyboardEventSource: src, virtualKey: cKeyCode, keyDown: false),
+              let cmdUp = CGEvent(keyboardEventSource: src, virtualKey: cmdKeyCode, keyDown: false) else {
+            return nil
+        }
+
+        cDown.flags = .maskCommand
+        cUp.flags = .maskCommand
+
+        cmdDown.post(tap: .cghidEventTap)
+        cDown.post(tap: .cghidEventTap)
+        cUp.post(tap: .cghidEventTap)
+        cmdUp.post(tap: .cghidEventTap)
+
+        // Wait up to 50ms for clipboard changeCount to increment
+        for _ in 0..<5 {
+            usleep(10_000) // 10ms
+            if pasteboard.changeCount > initialChangeCount {
+                if let copied = pasteboard.string(forType: .string) {
+                    let trimmed = copied.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty {
+                        logger.info("Captured selected text via Cmd+C fallback (\(trimmed.count) chars).")
+                        return trimmed
+                    }
+                }
+                break
+            }
+        }
+
+        return nil
+    }
+
+    public func captureClipboardText() -> String? {
+        guard let text = NSPasteboard.general.string(forType: .string) else {
+            return nil
+        }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    public func replaceSelectedText(_ newText: String, completion: ((Bool) -> Void)? = nil) {
+        // Replaces currently highlighted text in-place using instant clipboard paste
+        insertText(newText, completion: completion)
+    }
 }

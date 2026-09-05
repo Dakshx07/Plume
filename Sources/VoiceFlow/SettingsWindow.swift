@@ -27,7 +27,7 @@ public final class SettingsWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "VoiceFlow Settings"
+        window.title = "Plume Settings"
         window.center()
         window.isReleasedWhenClosed = false
 
