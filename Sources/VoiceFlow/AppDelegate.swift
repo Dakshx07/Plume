@@ -75,13 +75,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         menu.addItem(NSMenuItem.separator())
 
         // 2. Start / Stop Recording action item
-        let recordItem = NSMenuItem(title: "Dictate (Hold Control ~1s)", action: #selector(toggleRecordingFromMenu), keyEquivalent: "")
+        let recordItem = NSMenuItem(title: "Dictate (Double-Tap ⌃)", action: #selector(toggleRecordingFromMenu), keyEquivalent: "")
         recordItem.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Record")
         recordItem.target = self
         menu.addItem(recordItem)
         self.menuRecordItem = recordItem
 
-        let transformItem = NSMenuItem(title: "Transform Selection (Hold ⇧ Control ~1s)", action: #selector(toggleTransformFromMenu), keyEquivalent: "")
+        let transformItem = NSMenuItem(title: "Transform Selection (Double-Tap ⇧ ⌃)", action: #selector(toggleTransformFromMenu), keyEquivalent: "")
         transformItem.image = NSImage(systemSymbolName: "wand.and.stars", accessibilityDescription: "Transform")
         transformItem.target = self
         menu.addItem(transformItem)
@@ -135,7 +135,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         view.addSubview(status)
         self.menuStatusBadge = status
 
-        let keycap = NSTextField(labelWithString: "⌥ Space")
+        let keycap = NSTextField(labelWithString: "⌃ ⌃")
         keycap.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
         keycap.textColor = .secondaryLabelColor
         keycap.alignment = .center
@@ -176,7 +176,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
             menuRecordItem?.title = "Stop Recording"
             menuRecordItem?.image = NSImage(systemSymbolName: "stop.circle.fill", accessibilityDescription: "Stop")
         } else {
-            menuRecordItem?.title = "Dictate (Hold Control ~1s)"
+            menuRecordItem?.title = "Dictate (Double-Tap ⌃)"
             menuRecordItem?.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Record")
 
             switch state {
@@ -234,11 +234,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
                 title: "Whisper Model Missing",
                 message: "Model not found at \(Config.whisperModelPath). Please verify the model file."
             )
-        }
-
-        if !Permissions.shared.isAccessibilityGranted {
-            logger.info("Accessibility permission not yet granted. Requesting...")
-            Permissions.shared.requestAccessibility()
         }
     }
 

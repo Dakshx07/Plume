@@ -4,8 +4,8 @@ import QuartzCore
 import os.log
 
 public enum HotkeyAction {
-    case dictate          // Hold Control (~1s)
-    case transform        // Hold Shift + Control (~1s)
+    case dictate          // Double-tap Control
+    case transform        // Double-tap Control with Shift held
 }
 
 @MainActor
@@ -19,13 +19,13 @@ public final class HotkeyManager: @unchecked Sendable {
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var lastToggleTime: TimeInterval = 0
 
-    // Control-Hold State
-    private var controlHoldTimer: DispatchWorkItem?
-    private var isControlActive: Bool = false
+    // Double-Tap Control State
+    private var lastControlTapTime: TimeInterval = 0
     private var hadOtherKeyPressed: Bool = false
     public var isRecording: Bool = false
+    public static let doubleTapMaxInterval: TimeInterval = 0.38
+    public static let doubleTapMinInterval: TimeInterval = 0.05
 
     public var isEnabled: Bool = true
 
@@ -66,11 +66,12 @@ public final class HotkeyManager: @unchecked Sendable {
         self.runLoopSource = source
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
-        logger.info("HotkeyManager event tap started with Control-hold trigger.")
+        logger.info("HotkeyManager event tap started with Double-Tap Control trigger.")
     }
 
     public func stop() {
-        cancelControlHold()
+        lastControlTapTime = 0
+        hadOtherKeyPressed = false
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
             if let source = runLoopSource {
@@ -80,13 +81,6 @@ public final class HotkeyManager: @unchecked Sendable {
             self.eventTap = nil
             logger.info("HotkeyManager event tap stopped.")
         }
-    }
-
-    private func cancelControlHold() {
-        controlHoldTimer?.cancel()
-        controlHoldTimer = nil
-        isControlActive = false
-        hadOtherKeyPressed = false
     }
 
     private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -109,71 +103,56 @@ public final class HotkeyManager: @unchecked Sendable {
         let hasShift = flags.contains(.maskShift)
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
 
-        // 1. Any regular key press (like C in Ctrl+C, or letters) cancels the hold timer
+        // 1. Any regular key press (like C in Ctrl+C, or typing letters) cancels pending double-tap
         if type == .keyDown {
-            if isControlActive {
-                hadOtherKeyPressed = true
-                cancelControlHold()
-            }
+            hadOtherKeyPressed = true
+            lastControlTapTime = 0
             return Unmanaged.passUnretained(event)
         }
 
-        // 2. Modifier key changes (Control pressed or released)
+        // 2. Modifier key changes (Control tapped)
         if type == .flagsChanged {
             let isControlKey = (keyCode == 59 || keyCode == 62) // Left or Right Control key
 
-            if hasControl {
-                // If Command or Option are held, this is a system shortcut (ignore)
+            if hasControl && isControlKey {
+                // If Command or Option is held, this is an IDE/system shortcut (ignore)
                 if hasCmd || hasOption {
-                    cancelControlHold()
+                    lastControlTapTime = 0
                     return Unmanaged.passUnretained(event)
                 }
 
-                // If currently recording, pressing Control stops recording immediately!
-                if isRecording && isControlKey {
-                    let now = CACurrentMediaTime()
-                    if now - lastToggleTime >= Config.Hotkey.debounceIntervalSeconds {
-                        lastToggleTime = now
-                        logger.info("Control pressed while recording -> Stopping session")
-                        DispatchQueue.main.async { [weak self] in
-                            guard let self = self else { return }
-                            self.delegate?.hotkeyManagerDidTriggerAction(self, action: .dictate)
-                        }
+                // If currently recording: a single tap of Control stops recording immediately!
+                if isRecording {
+                    isRecording = false
+                    lastControlTapTime = 0
+                    logger.info("Control tapped while recording -> Stopping session")
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
+                        self.delegate?.hotkeyManagerDidTriggerAction(self, action: .dictate)
                     }
                     return Unmanaged.passUnretained(event)
                 }
 
-                // Not recording: starting Control hold
-                if isControlKey && !isControlActive && !isRecording {
-                    isControlActive = true
+                // Not recording: check for Double-Tap Control
+                let now = CACurrentMediaTime()
+                let interval = now - lastControlTapTime
+
+                if interval <= Self.doubleTapMaxInterval && interval >= Self.doubleTapMinInterval && !hadOtherKeyPressed {
+                    // Double-tap confirmed!
+                    lastControlTapTime = 0
                     hadOtherKeyPressed = false
 
                     let action: HotkeyAction = hasShift ? .transform : .dictate
+                    logger.info("Double-Tap Control detected -> Triggering \(String(describing: action))")
 
-                    // Schedule trigger after holding Control for ~1.1s (1 to <2s)
-                    let holdItem = DispatchWorkItem { [weak self] in
-                        guard let self = self,
-                              self.isControlActive,
-                              !self.hadOtherKeyPressed,
-                              !self.isRecording else { return }
-
-                        let now = CACurrentMediaTime()
-                        self.lastToggleTime = now
-                        self.logger.info("Control held for \(Config.Hotkey.controlHoldDurationSeconds)s -> Triggering \(String(describing: action))")
-
-                        DispatchQueue.main.async { [weak self] in
-                            guard let self = self else { return }
-                            self.delegate?.hotkeyManagerDidTriggerAction(self, action: action)
-                        }
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
+                        self.delegate?.hotkeyManagerDidTriggerAction(self, action: action)
                     }
-
-                    self.controlHoldTimer = holdItem
-                    DispatchQueue.main.asyncAfter(deadline: .now() + Config.Hotkey.controlHoldDurationSeconds, execute: holdItem)
-                }
-            } else {
-                // Control released
-                if isControlActive {
-                    cancelControlHold()
+                } else {
+                    // First tap
+                    lastControlTapTime = now
+                    hadOtherKeyPressed = false
                 }
             }
         }

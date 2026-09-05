@@ -8,8 +8,7 @@ echo "Building Plume (Release)..."
 swift build -c release
 
 APP_NAME="Plume.app"
-INSTALL_DIR="$HOME/Applications"
-mkdir -p "$INSTALL_DIR"
+INSTALL_DIR="/Applications"
 APP_BUNDLE="$INSTALL_DIR/$APP_NAME"
 
 echo "Bundling $APP_NAME into $INSTALL_DIR..."
@@ -25,13 +24,17 @@ fi
 
 chmod +x "$APP_BUNDLE/Contents/MacOS/Plume"
 
-# Also install directly into system /Applications for Finder & Spotlight visibility
-if [ -w "/Applications" ]; then
-    echo "Installing into /Applications/Plume.app..."
-    rm -rf "/Applications/Plume.app"
-    cp -R "$APP_BUNDLE" "/Applications/Plume.app"
-    touch "/Applications/Plume.app"
+# Detect Developer Identity for permanent TCC permissions
+DEV_ID=$(security find-identity -p codesigning -v | grep "Apple Development" | head -n 1 | awk -F'"' '{print $2}')
+if [ -n "$DEV_ID" ]; then
+    echo "Signing with Developer Identity: $DEV_ID"
+    codesign --force --deep --sign "$DEV_ID" --identifier "com.dakshhiran.Plume" "$APP_BUNDLE"
+else
+    echo "Signing ad-hoc with designated requirement..."
+    codesign --force --deep --sign - --identifier "com.dakshhiran.Plume" "$APP_BUNDLE"
 fi
+
+touch "$APP_BUNDLE"
 
 # Configure LaunchAgent for auto-start at login
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
@@ -52,7 +55,7 @@ cat <<EOF > "$PLIST_FILE"
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
-    <true/>
+    <false/>
     <key>ProcessType</key>
     <string>Interactive</string>
 </dict>

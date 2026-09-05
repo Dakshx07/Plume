@@ -62,13 +62,14 @@ public final class WhisperTranscriber: @unchecked Sendable {
                 let process = Process()
                 process.executableURL = URL(fileURLWithPath: binaryPath)
 
+                let isEnglishOnly = modelPath.contains(".en.") || modelPath.hasSuffix(".en.bin")
                 process.arguments = [
                     "-m", modelPath,
                     "-f", audioFileURL.path,
                     "-nt",
                     "-of", outputPrefix,
                     "--output-txt",
-                    "-l", "auto",
+                    "-l", isEnglishOnly ? "en" : "auto",
                     "-t", "4",
                     "-pp"
                 ]

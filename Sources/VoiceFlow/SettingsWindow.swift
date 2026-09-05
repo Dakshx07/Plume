@@ -61,7 +61,7 @@ public final class SettingsWindowController: NSWindowController {
         iconBadge.contentTintColor = .labelColor
         contentView.addSubview(iconBadge)
 
-        let titleLabel = NSTextField(labelWithString: "VoiceFlow Preferences")
+        let titleLabel = NSTextField(labelWithString: "Plume Preferences")
         titleLabel.font = NSFont.systemFont(ofSize: 16, weight: .bold)
         titleLabel.frame = NSRect(x: 64, y: currentY + 8, width: 380, height: 20)
         contentView.addSubview(titleLabel)

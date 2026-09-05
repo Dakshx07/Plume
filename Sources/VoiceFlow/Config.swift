@@ -68,11 +68,19 @@ public enum Config {
 
     public static var whisperModelPath: String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let basePath = "\(home)/.voiceflow/models/ggml-base.en.bin"
-        if FileManager.default.fileExists(atPath: basePath) {
-            return basePath
+        let baseEnPath = "\(home)/.voiceflow/models/ggml-base.en.bin"
+        if FileManager.default.fileExists(atPath: baseEnPath) {
+            return baseEnPath
         }
-        return "\(home)/.voiceflow/models/ggml-large-v3-turbo.bin"
+        let baseMultiPath = "\(home)/.voiceflow/models/ggml-base.bin"
+        if FileManager.default.fileExists(atPath: baseMultiPath) {
+            return baseMultiPath
+        }
+        let turboPath = "\(home)/.voiceflow/models/ggml-large-v3-turbo.bin"
+        if FileManager.default.fileExists(atPath: turboPath) {
+            return turboPath
+        }
+        return baseEnPath
     }
 
     public static var isWhisperInstalled: Bool {
@@ -88,7 +96,7 @@ public enum Config {
         public static let sampleRate: Double = 16000.0
         public static let channelCount: UInt32 = 1
         public static let silenceThresholdDB: Float = -35.0
-        public static let silenceDurationSeconds: TimeInterval = 2.0
+        public static let silenceDurationSeconds: TimeInterval = 1.20
         public static let minRecordingDurationSeconds: TimeInterval = 0.5
         public static let maxRecordingDurationSeconds: TimeInterval = 120.0
     }
