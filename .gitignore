@@ -1,0 +1,32 @@
+# Xcode & Swift Package Manager
+.build/
+.swiftpm/
+DerivedData/
+Packages/
+Package.resolved
+
+# macOS System Files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Environment & Secret Keys
+.env
+.env.*
+*.key
+*.pem
+
+# Editor & IDE metadata
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.xcuserstate
+
+# Logs and Crash Reports
+*.log
+crash.log
