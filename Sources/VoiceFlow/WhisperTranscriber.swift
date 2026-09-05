@@ -63,16 +63,22 @@ public final class WhisperTranscriber: @unchecked Sendable {
                 process.executableURL = URL(fileURLWithPath: binaryPath)
 
                 let isEnglishOnly = modelPath.contains(".en.") || modelPath.hasSuffix(".en.bin")
-                process.arguments = [
+                var args = [
                     "-m", modelPath,
                     "-f", audioFileURL.path,
                     "-nt",
                     "-of", outputPrefix,
                     "--output-txt",
-                    "-l", isEnglishOnly ? "en" : "auto",
                     "-t", "4",
                     "-pp"
                 ]
+                if isEnglishOnly {
+                    args += ["-l", "en"]
+                } else {
+                    // Auto-detect foreign speech (e.g. Hindi) and translate directly to English
+                    args += ["-l", "auto", "-tr"]
+                }
+                process.arguments = args
 
                 var env = ProcessInfo.processInfo.environment
                 env["GGMETAL"] = "1"
@@ -155,6 +161,12 @@ public final class WhisperTranscriber: @unchecked Sendable {
         // Remove whisper timestamps: e.g. [00:00:00.000 --> 00:00:05.000] or [00:00:00]
         let timestampPattern = #"\[\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:\s*-->\s*\d{2}:\d{2}:\d{2}(?:\.\d{3})?)?\]"#
         if let regex = try? NSRegularExpression(pattern: timestampPattern) {
+            text = regex.stringByReplacingMatches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count), withTemplate: "")
+        }
+
+        // Remove foreign language indicator hallucinations: e.g. (speaking in foreign language), [speaking foreign language]
+        let foreignRegex = try? NSRegularExpression(pattern: #"[\(\[][\w\s]*foreign language[\w\s]*[\)\]]"#, options: .caseInsensitive)
+        if let regex = foreignRegex {
             text = regex.stringByReplacingMatches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count), withTemplate: "")
         }
 

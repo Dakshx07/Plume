@@ -44,14 +44,14 @@ else
     echo -e "${GREEN}✓ whisper-cpp ready.${RESET}"
 fi
 
-# 3. Download AI Speech Model
+# 3. Download AI Speech Model (Multilingual: Hindi, English, etc.)
 MODELS_DIR="$HOME/.voiceflow/models"
 mkdir -p "$MODELS_DIR"
-MODEL_FILE="$MODELS_DIR/ggml-base.en.bin"
+MODEL_FILE="$MODELS_DIR/ggml-base.bin"
 
 if [ ! -f "$MODEL_FILE" ] || [ $(wc -c < "$MODEL_FILE" 2>/dev/null || echo 0) -lt 100000000 ]; then
-    echo -e "${BLUE}▶ [2/4] Downloading high-speed AI speech model (~141 MB)...${RESET}"
-    curl -L --progress-bar "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin" -o "$MODEL_FILE.tmp"
+    echo -e "${BLUE}▶ [2/4] Downloading high-speed Multilingual AI speech model (~141 MB)...${RESET}"
+    curl -L --progress-bar "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin" -o "$MODEL_FILE.tmp"
     mv "$MODEL_FILE.tmp" "$MODEL_FILE"
     echo -e "${GREEN}✓ Speech model ready.${RESET}"
 else

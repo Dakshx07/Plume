@@ -202,7 +202,7 @@ public final class SettingsWindowController: NSWindowController {
         let shortcutCard = createCardView(frame: NSRect(x: 24, y: currentY - shortcutCardHeight, width: 432, height: shortcutCardHeight))
         contentView.addSubview(shortcutCard)
 
-        let keycapPill = NSTextField(labelWithString: "⌥ Option + Space")
+        let keycapPill = NSTextField(labelWithString: "⌃ ⌃  Double-Tap")
         keycapPill.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
         keycapPill.textColor = .labelColor
         keycapPill.alignment = .center
@@ -213,7 +213,7 @@ public final class SettingsWindowController: NSWindowController {
         keycapPill.frame = NSRect(x: 14, y: 12, width: 130, height: 22)
         shortcutCard.addSubview(keycapPill)
 
-        let shortcutDesc = NSTextField(labelWithString: "Tap anywhere to start dictation; tap again to finish & paste.")
+        let shortcutDesc = NSTextField(labelWithString: "Press Control twice (⌃ ⌃) to start; tap Control once to finish & paste.")
         shortcutDesc.font = NSFont.systemFont(ofSize: 11, weight: .regular)
         shortcutDesc.textColor = .secondaryLabelColor
         shortcutDesc.frame = NSRect(x: 154, y: 14, width: 264, height: 18)
@@ -362,20 +362,25 @@ public final class SettingsWindowController: NSWindowController {
 
     @objc private func checkPermissionsClicked() {
         if !Permissions.shared.isAccessibilityGranted {
+            Permissions.shared.openAccessibilitySettings()
             Permissions.shared.requestAccessibility()
-        }
-        if !Permissions.shared.isInputMonitoringGranted {
-            Permissions.shared.requestInputMonitoring()
         }
         if !Permissions.shared.isMicrophoneGranted {
             Permissions.shared.requestMicrophone { [weak self] _ in
                 self?.updatePermissionsStatus()
             }
         }
+        if !Permissions.shared.isInputMonitoringGranted {
+            Permissions.shared.openInputMonitoringSettings()
+            Permissions.shared.requestInputMonitoring()
+        }
+        AppDelegate.shared.attemptStartHotkey()
         updatePermissionsStatus()
     }
 
     public func updatePermissionsStatus() {
+        AppDelegate.shared.attemptStartHotkey()
+
         let ax = Permissions.shared.isAccessibilityGranted
         let mic = Permissions.shared.isMicrophoneGranted
         let input = Permissions.shared.isInputMonitoringGranted

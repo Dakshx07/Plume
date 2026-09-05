@@ -68,19 +68,19 @@ public enum Config {
 
     public static var whisperModelPath: String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let baseEnPath = "\(home)/.voiceflow/models/ggml-base.en.bin"
-        if FileManager.default.fileExists(atPath: baseEnPath) {
-            return baseEnPath
-        }
         let baseMultiPath = "\(home)/.voiceflow/models/ggml-base.bin"
         if FileManager.default.fileExists(atPath: baseMultiPath) {
             return baseMultiPath
+        }
+        let baseEnPath = "\(home)/.voiceflow/models/ggml-base.en.bin"
+        if FileManager.default.fileExists(atPath: baseEnPath) {
+            return baseEnPath
         }
         let turboPath = "\(home)/.voiceflow/models/ggml-large-v3-turbo.bin"
         if FileManager.default.fileExists(atPath: turboPath) {
             return turboPath
         }
-        return baseEnPath
+        return baseMultiPath
     }
 
     public static var isWhisperInstalled: Bool {

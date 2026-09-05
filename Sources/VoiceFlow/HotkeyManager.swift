@@ -28,6 +28,9 @@ public final class HotkeyManager: @unchecked Sendable {
     public static let doubleTapMinInterval: TimeInterval = 0.05
 
     public var isEnabled: Bool = true
+    public var isRunning: Bool {
+        return eventTap != nil
+    }
 
     public init() {}
 
@@ -35,8 +38,9 @@ public final class HotkeyManager: @unchecked Sendable {
         stop()
     }
 
-    public func start() {
-        guard eventTap == nil else { return }
+    @discardableResult
+    public func start() -> Bool {
+        guard eventTap == nil else { return true }
 
         // Mask for keyDown, keyUp, and flagsChanged (to capture modifier keys like Control)
         let mask = (1 << CGEventType.keyDown.rawValue) |
@@ -57,8 +61,8 @@ public final class HotkeyManager: @unchecked Sendable {
             },
             userInfo: observer
         ) else {
-            logger.error("Failed to create CGEventTap. Ensure Input Monitoring permission is granted.")
-            return
+            logger.warning("Failed to create CGEventTap. Permissions not yet available.")
+            return false
         }
 
         self.eventTap = tap
@@ -67,6 +71,7 @@ public final class HotkeyManager: @unchecked Sendable {
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
         logger.info("HotkeyManager event tap started with Double-Tap Control trigger.")
+        return true
     }
 
     public func stop() {

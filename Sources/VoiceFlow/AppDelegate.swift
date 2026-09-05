@@ -226,11 +226,44 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         audioRecorder.prewarm()
     }
 
+    private var hotkeyRetryTimer: Timer?
+
     private func setupHotkey() {
         hotkeyManager.delegate = self
-        // Delay 1.0 second to let system initialize before starting event tap
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.hotkeyManager.start()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAppDidBecomeActive),
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.attemptStartHotkey()
+        }
+    }
+
+    @objc private func handleAppDidBecomeActive() {
+        attemptStartHotkey()
+    }
+
+    public func attemptStartHotkey() {
+        if hotkeyManager.start() {
+            hotkeyRetryTimer?.invalidate()
+            hotkeyRetryTimer = nil
+            logger.info("HotkeyManager successfully active.")
+        } else {
+            // Keep retrying every 2.0 seconds until user enables permission in System Settings
+            if hotkeyRetryTimer == nil {
+                hotkeyRetryTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] timer in
+                    Task { @MainActor [weak self] in
+                        guard let self = self else { return }
+                        if self.hotkeyManager.start() {
+                            timer.invalidate()
+                            self.hotkeyRetryTimer = nil
+                            self.logger.info("HotkeyManager activated after permission granted.")
+                        }
+                    }
+                }
+            }
         }
     }
 
