@@ -473,6 +473,11 @@ public final class BotView: NSView {
     }
 
     private func performBlink() {
+        guard let win = self.window, win.isVisible else {
+            scheduleNextBlink()
+            return
+        }
+
         guard expression != .happy && expression != .proud else {
             scheduleNextBlink()
             return
@@ -499,6 +504,8 @@ public final class BotView: NSView {
     // MARK: - 60fps Animation Tick
 
     private func tick() {
+        guard let win = self.window, win.isVisible else { return }
+
         breathingPhase += 0.04
         if breathingPhase > .pi * 200.0 {
             breathingPhase = 0.0

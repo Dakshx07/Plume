@@ -121,10 +121,14 @@ public final class WhisperTranscriber: @unchecked Sendable {
                        let fileContent = String(data: fileData, encoding: .utf8) {
                         rawTranscript = fileContent
                     } else {
-                        // Fallback to stdout
                         let outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
                         rawTranscript = String(data: outData, encoding: .utf8) ?? ""
                     }
+
+                    try? stderrPipe.fileHandleForReading.close()
+                    try? stdoutPipe.fileHandleForReading.close()
+                    try? FileManager.default.removeItem(at: audioFileURL)
+                    try? FileManager.default.removeItem(atPath: expectedTxtFile)
 
                     let cleaned = self.postProcessTranscript(rawTranscript)
                     if cleaned.isEmpty {
@@ -133,6 +137,8 @@ public final class WhisperTranscriber: @unchecked Sendable {
                         continuation.resume(returning: cleaned)
                     }
                 } catch {
+                    try? FileManager.default.removeItem(at: audioFileURL)
+                    try? FileManager.default.removeItem(atPath: expectedTxtFile)
                     timer.cancel()
                     self.logger.error("Failed to run whisper.cpp: \(error.localizedDescription)")
                     continuation.resume(throwing: error)

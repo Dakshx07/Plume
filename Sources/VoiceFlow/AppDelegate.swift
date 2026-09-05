@@ -37,6 +37,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
 
+        cleanupTemporaryFiles()
         setupMenuBar()
         setupAudioRecorder()
         setupHotkey()
@@ -50,6 +51,20 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         hotkeyManager.stop()
         audioRecorder.stopRecording()
         audioRecorder.cleanup()
+        cleanupTemporaryFiles()
+    }
+
+    private func cleanupTemporaryFiles() {
+        let tempDir = FileManager.default.temporaryDirectory
+        DispatchQueue.global(qos: .utility).async {
+            guard let contents = try? FileManager.default.contentsOfDirectory(at: tempDir, includingPropertiesForKeys: nil) else { return }
+            for file in contents {
+                let name = file.lastPathComponent
+                if name.hasPrefix("voiceflow") || name.hasPrefix("whisper_out") {
+                    try? FileManager.default.removeItem(at: file)
+                }
+            }
+        }
     }
 
     // MARK: - Menu Bar Setup (Flow the Bot Living Status Item)
