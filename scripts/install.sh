@@ -106,14 +106,18 @@ fi
 
 chmod +x "$APP_BUNDLE/Contents/MacOS/Plume"
 
-# 7. Code Signing
+# Clear stale TCC caches from earlier attempts
+tccutil reset Accessibility com.dakshhiran.Plume 2>/dev/null || true
+tccutil reset ListenEvent com.dakshhiran.Plume 2>/dev/null || true
+
+# 7. Code Signing with persistent designated requirement
 DEV_ID=$(security find-identity -p codesigning -v 2>/dev/null | grep "Apple Development" | head -n 1 | awk -F'"' '{print $2}' || true)
 if [ -n "$DEV_ID" ]; then
     echo -e "  Signing with Developer Certificate: $DEV_ID"
     codesign --force --deep --sign "$DEV_ID" --identifier "com.dakshhiran.Plume" "$APP_BUNDLE"
 else
     echo -e "  Signing with persistent local identifier..."
-    codesign --force --deep --sign - --identifier "com.dakshhiran.Plume" "$APP_BUNDLE"
+    codesign --force --deep -s - --identifier "com.dakshhiran.Plume" -r='designated => identifier "com.dakshhiran.Plume"' "$APP_BUNDLE"
 fi
 touch "$APP_BUNDLE"
 

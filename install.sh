@@ -81,12 +81,16 @@ rm -f "$TMP_ZIP"
 xattr -cr "/Applications/Plume.app" 2>/dev/null || true
 chmod +x "/Applications/Plume.app/Contents/MacOS/Plume"
 
-# Code sign with local identity or persistent ad-hoc requirement
+# Clear stale TCC caches from earlier attempts so macOS creates a clean, valid entry
+tccutil reset Accessibility com.dakshhiran.Plume 2>/dev/null || true
+tccutil reset ListenEvent com.dakshhiran.Plume 2>/dev/null || true
+
+# Code sign with persistent designated requirement so TCC never invalidates
 DEV_ID=$(security find-identity -p codesigning -v 2>/dev/null | grep "Apple Development" | head -n 1 | awk -F'"' '{print $2}' || true)
 if [ -n "$DEV_ID" ]; then
     codesign --force --deep --sign "$DEV_ID" --identifier "com.dakshhiran.Plume" "/Applications/Plume.app" 2>/dev/null || true
 else
-    codesign --force --deep --sign - --identifier "com.dakshhiran.Plume" "/Applications/Plume.app" 2>/dev/null || true
+    codesign --force --deep -s - --identifier "com.dakshhiran.Plume" -r='designated => identifier "com.dakshhiran.Plume"' "/Applications/Plume.app" 2>/dev/null || true
 fi
 
 # 5. Configure Auto-Start at Login
