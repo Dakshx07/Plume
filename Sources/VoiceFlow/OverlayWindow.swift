@@ -11,13 +11,13 @@ public enum OverlayState: Equatable {
 public final class OverlayWindowController: NSWindowController {
     public static let shared = OverlayWindowController()
 
-    // Dimensions: 126pt listening pill, shrinks to 56pt resting pebble while bot wanders
+    // Dimensions: 126pt listening pill, capsule height 38pt
     private let pillWidthListening: CGFloat = 126.0
-    private let pillWidthProcessing: CGFloat = 56.0
     private let capsuleHeight: CGFloat = 38.0
     private let bottomMargin: CGFloat = 40.0
 
-    public private(set) var botWindow: BotWindow!
+    public private(set) var pillBotView: BotView!
+    public var botView: BotView { return pillBotView }
     public private(set) var wanderController: WanderController!
     private var waveformView: WaveformView!
 
@@ -52,14 +52,17 @@ public final class OverlayWindowController: NSWindowController {
     private func setupUI() {
         guard let window = self.window else { return }
 
-        // Waveform View directly in window
+        // Waveform View as primary pill container in window
         waveformView = WaveformView(frame: NSRect(x: 0, y: 0, width: pillWidthListening, height: capsuleHeight))
         waveformView.autoresizingMask = [.width, .height]
         window.contentView = waveformView
 
-        // Initialize Bot Window and Wander Controller
-        botWindow = BotWindow()
-        wanderController = WanderController(botWindow: botWindow, overlayWindow: window)
+        // Flow the Bot hosted directly inside the pill! (28x28 inside 38pt pill)
+        pillBotView = BotView(frame: NSRect(x: WanderController.minX, y: 5.0, width: 28.0, height: 28.0))
+        waveformView.addSubview(pillBotView)
+
+        // Wander Controller orchestrates Flow's dynamic in-pill playground
+        wanderController = WanderController(botView: pillBotView)
     }
 
     // MARK: - Layout & Positioning (Bottom Center)
@@ -89,6 +92,10 @@ public final class OverlayWindowController: NSWindowController {
 
         let finalFrame = targetFrame(width: pillWidthListening, offsetY: 0)
 
+        // Reset bot to home resting slot
+        pillBotView.frame = NSRect(x: WanderController.minX, y: 5.0, width: 28.0, height: 28.0)
+        pillBotView.alphaValue = 1.0
+
         if !isVisibleOnScreen || window.alphaValue < 0.05 {
             isVisibleOnScreen = true
             let initialFrame = targetFrame(width: pillWidthListening, offsetY: -16)
@@ -102,15 +109,6 @@ public final class OverlayWindowController: NSWindowController {
                 window.animator().setFrame(finalFrame, display: true)
                 window.animator().alphaValue = 1.0
             }
-
-            // Position bot in left slot of pill
-            botWindow.positionInsidePill(finalFrame)
-            if isTransform {
-                botWindow.botView.setExpression(.curious, animated: true)
-                botWindow.botView.setRotation(degrees: -6.0, animated: true)
-            } else {
-                botWindow.botView.startListeningGestures()
-            }
         } else {
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.14
@@ -118,20 +116,20 @@ public final class OverlayWindowController: NSWindowController {
                 window.animator().setFrame(finalFrame, display: true)
                 window.animator().alphaValue = 1.0
             }
-            botWindow.positionInsidePill(finalFrame)
-            if isTransform {
-                botWindow.botView.setExpression(.curious, animated: true)
-                botWindow.botView.setRotation(degrees: -6.0, animated: true)
-            } else {
-                botWindow.botView.startListeningGestures()
-            }
+        }
+
+        if isTransform {
+            pillBotView.setExpression(.curious, animated: true)
+            pillBotView.setRotation(degrees: -6.0, animated: true)
+        } else {
+            pillBotView.startListeningGestures()
         }
     }
 
     public func updateAudioLevel(_ level: Float) {
         if currentState == .listening {
             waveformView.setAudioLevel(level)
-            botWindow.botView.handleVoiceInput(level: level)
+            pillBotView.handleVoiceInput(level: level)
         }
     }
 
@@ -140,23 +138,23 @@ public final class OverlayWindowController: NSWindowController {
         guard currentState == .listening else { return }
         currentState = .processing
 
-        botWindow.botView.stopListeningGestures()
+        pillBotView.stopListeningGestures()
         waveformView.collapseBars()
 
-        // Keep pill at full width, launch bot into in-pill playground
+        // Launch Flow into dynamic in-pill playground
         wanderController.startWandering()
     }
 
-    /// When transcription and cleanup complete: Flow the Bot scurries back to the left slot, squishes, and smiles happy eyes!
+    /// When transcription and cleanup complete: Flow scurries back to home slot, squishes, and smiles happy eyes!
     public func finishSuccess(completion: (() -> Void)? = nil) {
         currentState = .success
         cancelAutoDismiss()
-        botWindow.botView.stopListeningGestures()
+        pillBotView.stopListeningGestures()
 
         wanderController.returnToPill { [weak self] in
             completion?()
-            // Celebrate for 1.0 second, then smoothly fade out
-            self?.autoDismissTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [weak self] _ in
+            // Celebrate for 0.9 second, then smoothly slide out
+            self?.autoDismissTimer = Timer.scheduledTimer(withTimeInterval: 0.9, repeats: false) { [weak self] _ in
                 self?.hide()
             }
         }
@@ -165,7 +163,7 @@ public final class OverlayWindowController: NSWindowController {
     public func showError(_ message: String) {
         currentState = .error(message)
         cancelAutoDismiss()
-        botWindow.botView.stopListeningGestures()
+        pillBotView.stopListeningGestures()
 
         guard let window = self.window else { return }
 
@@ -192,7 +190,7 @@ public final class OverlayWindowController: NSWindowController {
     public func hide() {
         cancelAutoDismiss()
         wanderController.stopWandering()
-        botWindow.botView.stopListeningGestures()
+        pillBotView.stopListeningGestures()
         waveformView.stopAnimating()
 
         guard let window = self.window, isVisibleOnScreen else { return }
@@ -205,12 +203,11 @@ public final class OverlayWindowController: NSWindowController {
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             window.animator().setFrame(exitFrame, display: true)
             window.animator().alphaValue = 0.0
-            botWindow.animator().alphaValue = 0.0
         }, completionHandler: { [weak self] in
             guard let self = self else { return }
             self.window?.orderOut(nil)
-            self.botWindow.orderOut(nil)
-            self.botWindow.alphaValue = 1.0
+            self.pillBotView.setRotation(degrees: 0.0, animated: false)
+            self.pillBotView.setLookDirection(.zero)
         })
     }
 

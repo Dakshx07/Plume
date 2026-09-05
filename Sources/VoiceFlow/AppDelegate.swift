@@ -60,6 +60,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         if let button = statusItem.button {
             button.subviews.forEach { $0.removeFromSuperview() }
             let miniBot = BotView(frame: NSRect(x: 4, y: 1, width: 20, height: 20))
+            miniBot.startMenuBarCompanionMode()
             button.addSubview(miniBot)
             self.miniBotView = miniBot
         }
@@ -166,8 +167,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
 
     private func updateMenuStatus(text: String, isRecording: Bool = false) {
         if isRecording {
-            miniBotView?.setExpression(.amazed, animated: true)
+            miniBotView?.stopMenuBarCompanionMode()
             miniBotView?.stopSpinning()
+            miniBotView?.setExpression(.amazed, animated: true)
+            miniBotView?.setRotation(degrees: -5.0, animated: true)
             menuStatusBadge?.stringValue = "● Recording"
             menuStatusBadge?.textColor = .systemRed
             menuRecordItem?.title = "Stop Recording"
@@ -180,14 +183,17 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
             case .idle:
                 miniBotView?.stopSpinning()
                 miniBotView?.setExpression(.attentive, animated: true)
+                miniBotView?.startMenuBarCompanionMode()
                 menuStatusBadge?.stringValue = "● Ready"
                 menuStatusBadge?.textColor = NSColor(calibratedRed: 0.16, green: 0.78, blue: 0.35, alpha: 1.0)
             case .transcribing, .processing, .saving:
+                miniBotView?.stopMenuBarCompanionMode()
                 miniBotView?.setExpression(.thinking, animated: true)
                 miniBotView?.startSpinning()
                 menuStatusBadge?.stringValue = "● Processing..."
                 menuStatusBadge?.textColor = .systemOrange
             case .error:
+                miniBotView?.stopMenuBarCompanionMode()
                 miniBotView?.stopSpinning()
                 miniBotView?.setExpression(.surprised, animated: true)
                 menuStatusBadge?.stringValue = "● Error"
@@ -370,6 +376,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
             Permissions.shared.replaceSelectedText(transformed) { [weak self] success in
                 guard let self = self else { return }
                 if success {
+                    self.miniBotView?.stopSpinning()
+                    self.miniBotView?.setExpression(.happy, animated: true)
+                    self.miniBotView?.squish()
                     OverlayWindowController.shared.finishSuccess {
                         self.resetToIdleAfterDelay(1.0)
                     }
@@ -414,6 +423,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
             Permissions.shared.insertText(cleanedText) { [weak self] success in
                 guard let self = self else { return }
                 if success {
+                    self.miniBotView?.stopSpinning()
+                    self.miniBotView?.setExpression(.happy, animated: true)
+                    self.miniBotView?.squish()
                     OverlayWindowController.shared.finishSuccess {
                         self.resetToIdleAfterDelay(1.0)
                     }

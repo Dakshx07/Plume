@@ -104,7 +104,9 @@ public final class BotView: NSView {
     private var blinkTimer: Timer?
     private var gestureTimer: Timer?
     private var amazedHoldTimer: Timer?
+    private var companionTimer: Timer?
     private var isListening = false
+    private var isCompanionMode = false
 
     public override var isOpaque: Bool {
         return false
@@ -125,6 +127,7 @@ public final class BotView: NSView {
         blinkTimer?.invalidate()
         gestureTimer?.invalidate()
         amazedHoldTimer?.invalidate()
+        companionTimer?.invalidate()
     }
 
     private func setup() {
@@ -204,6 +207,115 @@ public final class BotView: NSView {
     public func stopSpinning() {
         isSpinning = false
         targetRotation = 0.0
+    }
+
+    // MARK: - Physical Reactions & Gliding
+
+    public func squish() {
+        setScale(x: 1.28, y: 0.72, animated: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            self?.setScale(x: 0.92, y: 1.08, animated: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) { [weak self] in
+                self?.setScale(x: 1.0, y: 1.0, animated: true)
+            }
+        }
+    }
+
+    public func glide(to targetX: CGFloat, duration: TimeInterval, timing: CAMediaTimingFunction? = nil, completion: (() -> Void)? = nil) {
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = duration
+            context.timingFunction = timing ?? CAMediaTimingFunction(name: .easeInEaseOut)
+            context.allowsImplicitAnimation = true
+            var f = self.frame
+            f.origin.x = targetX
+            self.animator().frame = f
+        }, completionHandler: {
+            completion?()
+        })
+    }
+
+    // MARK: - Living Menu Bar Companion Mode
+
+    public func startMenuBarCompanionMode() {
+        guard !isCompanionMode else { return }
+        isCompanionMode = true
+        scheduleNextCompanionGesture()
+    }
+
+    public func stopMenuBarCompanionMode() {
+        isCompanionMode = false
+        companionTimer?.invalidate()
+        companionTimer = nil
+        setRotation(degrees: 0.0, animated: true)
+        setLookDirection(.zero)
+        setBobY(0.0, animated: true)
+    }
+
+    private func scheduleNextCompanionGesture() {
+        guard isCompanionMode else { return }
+        let delay = Double.random(in: 1.4...3.2)
+        companionTimer?.invalidate()
+        companionTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            self?.performCompanionGesture()
+        }
+    }
+
+    private func performCompanionGesture() {
+        guard isCompanionMode else { return }
+
+        let action = Int.random(in: 0...5)
+        switch action {
+        case 0:
+            // Look left (towards menu bar clock/active app) with cute head tilt
+            setLookDirection(CGPoint(x: -0.85, y: 0.0))
+            setRotation(degrees: 6.0, animated: true)
+            setExpression(.curious, animated: true)
+            scheduleCompanionReset(after: 1.2)
+        case 1:
+            // Look right (towards control center) with opposite tilt
+            setLookDirection(CGPoint(x: 0.85, y: 0.0))
+            setRotation(degrees: -6.0, animated: true)
+            setExpression(.attentive, animated: true)
+            scheduleCompanionReset(after: 1.2)
+        case 2:
+            // Look down towards user's workspace / screen!
+            setLookDirection(CGPoint(x: 0.0, y: -0.85))
+            setRotation(degrees: 0.0, animated: true)
+            setBobY(-0.8, animated: true)
+            scheduleCompanionReset(after: 1.0)
+        case 3:
+            // Cute head tilt with centered eyes
+            setLookDirection(CGPoint(x: 0.2, y: 0.2))
+            setRotation(degrees: Bool.random() ? 7.0 : -7.0, animated: true)
+            setExpression(.attentive, animated: true)
+            scheduleCompanionReset(after: 1.1)
+        case 4:
+            // Little happy micro-bounce
+            setBobY(1.2, animated: true)
+            setExpression(.amazed, animated: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+                self?.setBobY(0.0, animated: true)
+                self?.setExpression(.attentive, animated: true)
+            }
+            scheduleNextCompanionGesture()
+        default:
+            // Rest centered
+            setLookDirection(.zero)
+            setRotation(degrees: 0.0, animated: true)
+            setExpression(.attentive, animated: true)
+            scheduleNextCompanionGesture()
+        }
+    }
+
+    private func scheduleCompanionReset(after delay: TimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self = self, self.isCompanionMode else { return }
+            self.setLookDirection(.zero)
+            self.setRotation(degrees: 0.0, animated: true)
+            self.setBobY(0.0, animated: true)
+            self.setExpression(.attentive, animated: true)
+            self.scheduleNextCompanionGesture()
+        }
     }
 
     // MARK: - In-Place Gesture Cycle During Listening
@@ -403,19 +515,22 @@ public final class BotView: NSView {
 
         context.saveGState()
 
+        let dim = min(bounds.width, bounds.height)
+        let scaleRatio = dim / 36.0
+
         let breathFactor = 1.0 + sin(breathingPhase) * 0.015
         let scaleX = currentScaleX * breathFactor
         let scaleY = currentScaleY * breathFactor
 
-        let center = CGPoint(x: bounds.midX, y: bounds.midY + currentBobY)
+        let center = CGPoint(x: bounds.midX, y: bounds.midY + currentBobY * scaleRatio)
 
         // Rotate in-place around center of the bot body
         context.translateBy(x: center.x, y: center.y)
         context.rotate(by: currentRotation)
         context.translateBy(x: -center.x, y: -center.y)
 
-        // Body diameter is 24pt inside a 36pt frame, leaving 6pt margin for shadow
-        let baseRadius: CGFloat = 12.0
+        // Body diameter scales proportionally with canvas
+        let baseRadius: CGFloat = 12.0 * scaleRatio
         let radiusX = baseRadius * scaleX
         let radiusY = baseRadius * scaleY
         let botRect = CGRect(x: center.x - radiusX, y: center.y - radiusY, width: radiusX * 2.0, height: radiusY * 2.0)
@@ -423,8 +538,8 @@ public final class BotView: NSView {
         // Subtle soft drop shadow underneath the bot
         context.saveGState()
         context.setShadow(
-            offset: CGSize(width: 0, height: -1.5),
-            blur: 3.5,
+            offset: CGSize(width: 0, height: -1.2 * scaleRatio),
+            blur: 3.0 * scaleRatio,
             color: NSColor.black.withAlphaComponent(0.25).cgColor
         )
         // Solid pure white body (#FFFFFF)
@@ -433,32 +548,33 @@ public final class BotView: NSView {
         context.restoreGState()
 
         // Eye positions (centered slightly above middle of the circle)
-        let eyeY = center.y + currentEyeYOffset + 1.2
-        let eyeSpacing: CGFloat = 4.4
-        let eyeOffsetX = lookDirection.x * 1.5
-        let eyeOffsetY = -lookDirection.y * 1.2
+        let eyeY = center.y + (currentEyeYOffset + 1.2) * scaleRatio
+        let eyeSpacing: CGFloat = 4.4 * scaleRatio
+        let eyeOffsetX = lookDirection.x * 1.6 * scaleRatio
+        let eyeOffsetY = -lookDirection.y * 1.3 * scaleRatio
 
-        let eyeHeightWithBlink = currentEyeHeight * currentBlink
+        let eyeHeightWithBlink = currentEyeHeight * scaleRatio * currentBlink
+        let eyeWidth = currentEyeWidth * scaleRatio
 
-        let leftEyeCenter = CGPoint(x: center.x - eyeSpacing + eyeOffsetX, y: eyeY + currentLeftEyeYOffset + eyeOffsetY)
+        let leftEyeCenter = CGPoint(x: center.x - eyeSpacing + eyeOffsetX, y: eyeY + currentLeftEyeYOffset * scaleRatio + eyeOffsetY)
         let rightEyeCenter = CGPoint(x: center.x + eyeSpacing + eyeOffsetX, y: eyeY + eyeOffsetY)
 
         let config = expression.eyeConfig
         if config.isArc {
             // Draw upward smile arcs (happy eyes ⌣ ⌣)
-            drawHappyEye(at: leftEyeCenter, width: currentEyeWidth, context: context)
-            drawHappyEye(at: rightEyeCenter, width: currentEyeWidth, context: context)
+            drawHappyEye(at: leftEyeCenter, width: eyeWidth, scaleRatio: scaleRatio, context: context)
+            drawHappyEye(at: rightEyeCenter, width: eyeWidth, scaleRatio: scaleRatio, context: context)
         } else {
             // Draw pill-shaped eyes
-            drawEye(at: leftEyeCenter, width: currentEyeWidth, height: eyeHeightWithBlink, cornerRadius: config.cornerRadius, context: context)
-            drawEye(at: rightEyeCenter, width: currentEyeWidth, height: eyeHeightWithBlink, cornerRadius: config.cornerRadius, context: context)
+            drawEye(at: leftEyeCenter, width: eyeWidth, height: eyeHeightWithBlink, cornerRadius: config.cornerRadius * scaleRatio, context: context)
+            drawEye(at: rightEyeCenter, width: eyeWidth, height: eyeHeightWithBlink, cornerRadius: config.cornerRadius * scaleRatio, context: context)
         }
 
         context.restoreGState()
     }
 
     private func drawEye(at center: CGPoint, width: CGFloat, height: CGFloat, cornerRadius: CGFloat, context: CGContext) {
-        let safeHeight = max(height, 0.6)
+        let safeHeight = max(height, 0.5)
         let eyeRect = CGRect(
             x: center.x - width / 2.0,
             y: center.y - safeHeight / 2.0,
@@ -477,19 +593,19 @@ public final class BotView: NSView {
         context.fillPath()
     }
 
-    private func drawHappyEye(at center: CGPoint, width: CGFloat, context: CGContext) {
+    private func drawHappyEye(at center: CGPoint, width: CGFloat, scaleRatio: CGFloat, context: CGContext) {
         context.saveGState()
         context.setStrokeColor(NSColor.black.cgColor)
-        context.setLineWidth(1.8)
+        context.setLineWidth(max(1.0, 1.8 * scaleRatio))
         context.setLineCap(.round)
 
         let halfW = width / 2.0
         let path = CGMutablePath()
         // Smile curve: start left, curve down in center, end right
-        path.move(to: CGPoint(x: center.x - halfW, y: center.y + 1.0))
+        path.move(to: CGPoint(x: center.x - halfW, y: center.y + 1.0 * scaleRatio))
         path.addQuadCurve(
-            to: CGPoint(x: center.x + halfW, y: center.y + 1.0),
-            control: CGPoint(x: center.x, y: center.y - 2.2)
+            to: CGPoint(x: center.x + halfW, y: center.y + 1.0 * scaleRatio),
+            control: CGPoint(x: center.x, y: center.y - 2.2 * scaleRatio)
         )
         context.addPath(path)
         context.strokePath()
@@ -531,7 +647,7 @@ public final class BotWindow: NSPanel {
         // Position bot at the left inside slot of the pill
         let botX = pillFrame.origin.x + 8.0 - 4.0 // 4pt padding offset for 36pt window over 24pt circle
         let botY = pillFrame.origin.y + (pillFrame.height - BotWindow.windowSize) / 2.0
-        setFrameOrigin(NSPoint(x: botX, y: botY))
+        setFrame(NSRect(x: botX, y: botY, width: BotWindow.windowSize, height: BotWindow.windowSize), display: true)
         orderFrontRegardless()
     }
 
@@ -542,7 +658,7 @@ public final class BotWindow: NSPanel {
             context.duration = duration
             context.timingFunction = timing ?? CAMediaTimingFunction(controlPoints: 0.4, 0, 0.6, 1)
             context.allowsImplicitAnimation = true
-            self.animator().setFrameOrigin(point)
+            self.animator().setFrame(NSRect(origin: point, size: self.frame.size), display: true)
         }, completionHandler: {
             completion?()
         })
