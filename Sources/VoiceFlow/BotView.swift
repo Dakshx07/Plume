@@ -96,6 +96,12 @@ public final class BotView: NSView {
     private var speechPhase: CGFloat = 0.0
     private var isSpinning = false
 
+    // 3D Spherical Pirouette Spin
+    private var spinAngle: CGFloat = 0.0
+    private var isPirouetting = false
+    private var pirouetteTargetAngle: CGFloat = 0.0
+    private var pirouetteCompletion: (() -> Void)?
+
     // Breathing & eye movement
     private var breathingPhase: CGFloat = 0
     private var lookDirection: CGPoint = .zero // (-1...1, -1...1)
@@ -202,10 +208,23 @@ public final class BotView: NSView {
 
     public func startSpinning() {
         isSpinning = true
+        isPirouetting = false
+        targetRotation = 0.0
     }
 
     public func stopSpinning() {
         isSpinning = false
+        isPirouetting = false
+        targetRotation = 0.0
+        spinAngle = 0.0
+    }
+
+    public func spinPirouette(revolutions: Int = 1, speed: CGFloat = 0.22, completion: (() -> Void)? = nil) {
+        guard !isSpinning else { return }
+        isPirouetting = true
+        spinAngle = 0.0
+        pirouetteTargetAngle = CGFloat(revolutions) * .pi * 2.0
+        pirouetteCompletion = completion
         targetRotation = 0.0
     }
 
@@ -266,44 +285,47 @@ public final class BotView: NSView {
         let action = Int.random(in: 0...5)
         switch action {
         case 0:
+            // Joyful 360 pirouette spin right in the menu bar with floating micro-bob!
+            setBobY(1.4, animated: true)
+            spinPirouette(revolutions: 1) { [weak self] in
+                self?.setBobY(0.0, animated: true)
+                self?.scheduleNextCompanionGesture()
+            }
+        case 1:
+            // Double pirouette spin with wide amazed eyes!
+            setExpression(.amazed, animated: true)
+            setBobY(1.6, animated: true)
+            spinPirouette(revolutions: 2) { [weak self] in
+                self?.setBobY(0.0, animated: true)
+                self?.setExpression(.attentive, animated: true)
+                self?.scheduleNextCompanionGesture()
+            }
+        case 2:
             // Look left (towards menu bar clock/active app) with cute head tilt
             setLookDirection(CGPoint(x: -0.85, y: 0.0))
-            setRotation(degrees: 6.0, animated: true)
+            setRotation(degrees: 7.0, animated: true)
             setExpression(.curious, animated: true)
             scheduleCompanionReset(after: 1.2)
-        case 1:
+        case 3:
             // Look right (towards control center) with opposite tilt
             setLookDirection(CGPoint(x: 0.85, y: 0.0))
-            setRotation(degrees: -6.0, animated: true)
+            setRotation(degrees: -7.0, animated: true)
             setExpression(.attentive, animated: true)
             scheduleCompanionReset(after: 1.2)
-        case 2:
-            // Look down towards user's workspace / screen!
+        case 4:
+            // Look down towards user's workspace / screen with cute squash!
             setLookDirection(CGPoint(x: 0.0, y: -0.85))
             setRotation(degrees: 0.0, animated: true)
             setBobY(-0.8, animated: true)
             scheduleCompanionReset(after: 1.0)
-        case 3:
-            // Cute head tilt with centered eyes
-            setLookDirection(CGPoint(x: 0.2, y: 0.2))
-            setRotation(degrees: Bool.random() ? 7.0 : -7.0, animated: true)
-            setExpression(.attentive, animated: true)
-            scheduleCompanionReset(after: 1.1)
-        case 4:
-            // Little happy micro-bounce
-            setBobY(1.2, animated: true)
-            setExpression(.amazed, animated: true)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-                self?.setBobY(0.0, animated: true)
-                self?.setExpression(.attentive, animated: true)
-            }
-            scheduleNextCompanionGesture()
         default:
-            // Rest centered
-            setLookDirection(.zero)
-            setRotation(degrees: 0.0, animated: true)
-            setExpression(.attentive, animated: true)
-            scheduleNextCompanionGesture()
+            // Excited squish bounce & happy smiling eyes!
+            squish()
+            setExpression(.happy, animated: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) { [weak self] in
+                self?.setExpression(.attentive, animated: true)
+                self?.scheduleNextCompanionGesture()
+            }
         }
     }
 
@@ -490,14 +512,27 @@ public final class BotView: NSView {
         currentScaleX = currentScaleX * 0.82 + targetScaleX * 0.18
         currentScaleY = currentScaleY * 0.82 + targetScaleY * 0.18
 
-        // Smooth lerp for in-place gestures or continuous spin
+        // 3D Spherical Pirouette Spin or In-Place Head Tilt
         if isSpinning {
-            currentRotation += 0.18
-            if currentRotation > .pi * 200.0 {
-                currentRotation = 0.0
+            spinAngle += 0.20
+            if spinAngle >= .pi * 2.0 {
+                spinAngle -= .pi * 2.0
             }
-            targetRotation = currentRotation
+            targetRotation = 0.0
+            currentRotation = currentRotation * 0.80
+        } else if isPirouetting {
+            spinAngle += 0.22
+            if spinAngle >= pirouetteTargetAngle {
+                spinAngle = 0.0
+                isPirouetting = false
+                let comp = pirouetteCompletion
+                pirouetteCompletion = nil
+                comp?()
+            }
+            targetRotation = 0.0
+            currentRotation = currentRotation * 0.80
         } else {
+            spinAngle = 0.0
             currentRotation = currentRotation * 0.84 + targetRotation * 0.16
         }
         currentBobY = currentBobY * 0.78 + targetBobY * 0.22
@@ -516,7 +551,8 @@ public final class BotView: NSView {
         context.saveGState()
 
         let dim = min(bounds.width, bounds.height)
-        let scaleRatio = dim / 36.0
+        let baseRadius: CGFloat = max(6.0, (dim - 2.5) / 2.0)
+        let scaleRatio = dim / 26.0
 
         let breathFactor = 1.0 + sin(breathingPhase) * 0.015
         let scaleX = currentScaleX * breathFactor
@@ -524,13 +560,12 @@ public final class BotView: NSView {
 
         let center = CGPoint(x: bounds.midX, y: bounds.midY + currentBobY * scaleRatio)
 
-        // Rotate in-place around center of the bot body
+        // Rotate in-place around center of the bot body (only for head tilts, not when pirouetting!)
         context.translateBy(x: center.x, y: center.y)
         context.rotate(by: currentRotation)
         context.translateBy(x: -center.x, y: -center.y)
 
-        // Body diameter scales proportionally with canvas
-        let baseRadius: CGFloat = 12.0 * scaleRatio
+        // Body diameter scales boldly and comfortably with canvas
         let radiusX = baseRadius * scaleX
         let radiusY = baseRadius * scaleY
         let botRect = CGRect(x: center.x - radiusX, y: center.y - radiusY, width: radiusX * 2.0, height: radiusY * 2.0)
@@ -538,9 +573,9 @@ public final class BotView: NSView {
         // Subtle soft drop shadow underneath the bot
         context.saveGState()
         context.setShadow(
-            offset: CGSize(width: 0, height: -1.2 * scaleRatio),
-            blur: 3.0 * scaleRatio,
-            color: NSColor.black.withAlphaComponent(0.25).cgColor
+            offset: CGSize(width: 0, height: -1.0 * scaleRatio),
+            blur: 2.5 * scaleRatio,
+            color: NSColor.black.withAlphaComponent(0.22).cgColor
         )
         // Solid pure white body (#FFFFFF)
         context.setFillColor(NSColor.white.cgColor)
@@ -549,25 +584,66 @@ public final class BotView: NSView {
 
         // Eye positions (centered slightly above middle of the circle)
         let eyeY = center.y + (currentEyeYOffset + 1.2) * scaleRatio
-        let eyeSpacing: CGFloat = 4.4 * scaleRatio
-        let eyeOffsetX = lookDirection.x * 1.6 * scaleRatio
-        let eyeOffsetY = -lookDirection.y * 1.3 * scaleRatio
+        let eyeOffsetX = lookDirection.x * 1.5 * scaleRatio
+        let eyeOffsetY = -lookDirection.y * 1.2 * scaleRatio
 
         let eyeHeightWithBlink = currentEyeHeight * scaleRatio * currentBlink
         let eyeWidth = currentEyeWidth * scaleRatio
 
-        let leftEyeCenter = CGPoint(x: center.x - eyeSpacing + eyeOffsetX, y: eyeY + currentLeftEyeYOffset * scaleRatio + eyeOffsetY)
-        let rightEyeCenter = CGPoint(x: center.x + eyeSpacing + eyeOffsetX, y: eyeY + eyeOffsetY)
+        let isSpinningActive = isSpinning || isPirouetting
 
-        let config = expression.eyeConfig
-        if config.isArc {
-            // Draw upward smile arcs (happy eyes ⌣ ⌣)
-            drawHappyEye(at: leftEyeCenter, width: eyeWidth, scaleRatio: scaleRatio, context: context)
-            drawHappyEye(at: rightEyeCenter, width: eyeWidth, scaleRatio: scaleRatio, context: context)
+        if isSpinningActive {
+            // 3D Spherical pirouette projection:
+            // Eyes wrap smoothly across the sphere's surface in 3D perspective,
+            // compressing naturally near the edge and disappearing behind head
+            let theta0: CGFloat = 0.38 // orbital separation angle on sphere (~22 deg)
+            let alphaL = -theta0 + spinAngle
+            let alphaR = +theta0 + spinAngle
+
+            let depthL = cos(alphaL)
+            let depthR = cos(alphaR)
+
+            let config = expression.eyeConfig
+
+            // Draw left eye if on front hemisphere
+            if depthL > 0.02 {
+                let eyeXL = center.x + sin(alphaL) * (baseRadius * 0.72) + eyeOffsetX
+                let projWL = eyeWidth * max(0.18, depthL)
+                let ptL = CGPoint(x: eyeXL, y: eyeY + currentLeftEyeYOffset * scaleRatio + eyeOffsetY)
+                if config.isArc {
+                    drawHappyEye(at: ptL, width: projWL, scaleRatio: scaleRatio, context: context)
+                } else {
+                    drawEye(at: ptL, width: projWL, height: eyeHeightWithBlink, cornerRadius: config.cornerRadius * scaleRatio, context: context)
+                }
+            }
+
+            // Draw right eye if on front hemisphere
+            if depthR > 0.02 {
+                let eyeXR = center.x + sin(alphaR) * (baseRadius * 0.72) + eyeOffsetX
+                let projWR = eyeWidth * max(0.18, depthR)
+                let ptR = CGPoint(x: eyeXR, y: eyeY + eyeOffsetY)
+                if config.isArc {
+                    drawHappyEye(at: ptR, width: projWR, scaleRatio: scaleRatio, context: context)
+                } else {
+                    drawEye(at: ptR, width: projWR, height: eyeHeightWithBlink, cornerRadius: config.cornerRadius * scaleRatio, context: context)
+                }
+            }
         } else {
-            // Draw pill-shaped eyes
-            drawEye(at: leftEyeCenter, width: eyeWidth, height: eyeHeightWithBlink, cornerRadius: config.cornerRadius * scaleRatio, context: context)
-            drawEye(at: rightEyeCenter, width: eyeWidth, height: eyeHeightWithBlink, cornerRadius: config.cornerRadius * scaleRatio, context: context)
+            // Front-facing centered eyes with lookDirection & blinking
+            let eyeSpacing: CGFloat = 4.4 * scaleRatio
+            let leftEyeCenter = CGPoint(x: center.x - eyeSpacing + eyeOffsetX, y: eyeY + currentLeftEyeYOffset * scaleRatio + eyeOffsetY)
+            let rightEyeCenter = CGPoint(x: center.x + eyeSpacing + eyeOffsetX, y: eyeY + eyeOffsetY)
+
+            let config = expression.eyeConfig
+            if config.isArc {
+                // Draw upward smile arcs (happy eyes ⌣ ⌣)
+                drawHappyEye(at: leftEyeCenter, width: eyeWidth, scaleRatio: scaleRatio, context: context)
+                drawHappyEye(at: rightEyeCenter, width: eyeWidth, scaleRatio: scaleRatio, context: context)
+            } else {
+                // Draw pill-shaped eyes
+                drawEye(at: leftEyeCenter, width: eyeWidth, height: eyeHeightWithBlink, cornerRadius: config.cornerRadius * scaleRatio, context: context)
+                drawEye(at: rightEyeCenter, width: eyeWidth, height: eyeHeightWithBlink, cornerRadius: config.cornerRadius * scaleRatio, context: context)
+            }
         }
 
         context.restoreGState()

@@ -55,11 +55,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
     // MARK: - Menu Bar Setup (Flow the Bot Living Status Item)
 
     private func setupMenuBar() {
-        statusItem = NSStatusBar.system.statusItem(withLength: 28.0)
+        statusItem = NSStatusBar.system.statusItem(withLength: 30.0)
 
         if let button = statusItem.button {
             button.subviews.forEach { $0.removeFromSuperview() }
-            let miniBot = BotView(frame: NSRect(x: 4, y: 1, width: 20, height: 20))
+            let miniBot = BotView(frame: NSRect(x: 3, y: 1, width: 24, height: 22))
             miniBot.startMenuBarCompanionMode()
             button.addSubview(miniBot)
             self.miniBotView = miniBot
@@ -377,6 +377,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
                 guard let self = self else { return }
                 if success {
                     self.miniBotView?.stopSpinning()
+                    self.miniBotView?.spinPirouette(revolutions: 2)
                     self.miniBotView?.setExpression(.happy, animated: true)
                     self.miniBotView?.squish()
                     OverlayWindowController.shared.finishSuccess {
@@ -424,6 +425,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
                 guard let self = self else { return }
                 if success {
                     self.miniBotView?.stopSpinning()
+                    self.miniBotView?.spinPirouette(revolutions: 2)
                     self.miniBotView?.setExpression(.happy, animated: true)
                     self.miniBotView?.squish()
                     OverlayWindowController.shared.finishSuccess {
