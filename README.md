@@ -34,50 +34,29 @@
 
 | Shortcut | Action | Description |
 | :--- | :--- | :--- |
-| **`⌥ Space`** *(Option + Space)* | **Dictate** | Speak naturally; Plume transcribes, cleans grammar/fillers, and pastes at your cursor. |
-| **`⇧ ⌥ Space`** *(Shift + Option + Space)* | **Transform** | Edits highlighted text in-place using your spoken command, or transforms your clipboard. |
+| **`⌃ ⌃`** *(Double-Tap Control)* | **Dictate** | Speak naturally; Plume transcribes in sub-second time, cleans grammar/fillers, and types at cursor. Tap `⌃` once to stop. |
+| **`⇧ ⌃ ⌃`** *(Double-Tap Control with Shift)* | **Transform** | Edits highlighted text in-place using your spoken command, or transforms your clipboard. |
 
 ---
 
-## 🛠️ Architecture & Tech Stack
+## 🚀 One-Command Installation
 
-Plume is built with 100% native Apple technologies:
+To install Plume on any Mac in seconds:
 
-- **Language**: Swift 5.9+
-- **Frameworks**: AppKit, QuartzCore, AVFoundation (CoreAudio / AUVoiceIO), ApplicationServices (Accessibility API)
-- **Speech Engine**: Apple Silicon Metal-accelerated `whisper.cpp`
-- **AI Transformation**: Google Gemini Flash API
-- **Display Pipeline**: Direct Single-Surface CoreGraphics with hardware-accelerated CALayer transforms
+```bash
+git clone https://github.com/Dakshx07/Plume.git && cd Plume && ./scripts/install.sh
+```
 
----
+Or if the repository is public:
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Dakshx07/Plume/main/scripts/install.sh)"
+```
 
-## 🚀 Getting Started
-
-### Prerequisites
-
-- macOS 13.0 (Ventura) or newer (optimized for Apple Silicon M1/M2/M3/M4)
-- `whisper-cpp` (via Homebrew):
-  ```bash
-  brew install whisper-cpp
-  ```
-
-### Build & Run
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/Dakshx07/Plume.git
-   cd Plume
-   ```
-
-2. Build the release binary:
-   ```bash
-   swift build -c release
-   ```
-
-3. Launch Plume:
-   ```bash
-   ./.build/release/VoiceFlow
-   ```
+The script automatically:
+1. Installs `whisper-cpp` via Homebrew (if not present).
+2. Downloads the fast `ggml-base.en.bin` speech model (~141 MB).
+3. Builds and installs `Plume.app` into `/Applications/`.
+4. Sets up auto-start on login and launches Plume immediately!
 
 ---
 
