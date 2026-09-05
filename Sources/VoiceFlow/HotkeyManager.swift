@@ -4,8 +4,8 @@ import QuartzCore
 import os.log
 
 public enum HotkeyAction {
-    case dictate          // Option + Space
-    case transform        // Shift + Option + Space
+    case dictate          // Hold Control (~1s)
+    case transform        // Hold Shift + Control (~1s)
 }
 
 @MainActor
@@ -21,6 +21,12 @@ public final class HotkeyManager: @unchecked Sendable {
     private var runLoopSource: CFRunLoopSource?
     private var lastToggleTime: TimeInterval = 0
 
+    // Control-Hold State
+    private var controlHoldTimer: DispatchWorkItem?
+    private var isControlActive: Bool = false
+    private var hadOtherKeyPressed: Bool = false
+    public var isRecording: Bool = false
+
     public var isEnabled: Bool = true
 
     public init() {}
@@ -32,8 +38,10 @@ public final class HotkeyManager: @unchecked Sendable {
     public func start() {
         guard eventTap == nil else { return }
 
-        // Mask for keyDown and keyUp
-        let mask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue)
+        // Mask for keyDown, keyUp, and flagsChanged (to capture modifier keys like Control)
+        let mask = (1 << CGEventType.keyDown.rawValue) |
+                   (1 << CGEventType.keyUp.rawValue) |
+                   (1 << CGEventType.flagsChanged.rawValue)
 
         let observer = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
 
@@ -58,10 +66,11 @@ public final class HotkeyManager: @unchecked Sendable {
         self.runLoopSource = source
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
-        logger.info("HotkeyManager event tap started successfully.")
+        logger.info("HotkeyManager event tap started with Control-hold trigger.")
     }
 
     public func stop() {
+        cancelControlHold()
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
             if let source = runLoopSource {
@@ -71,6 +80,13 @@ public final class HotkeyManager: @unchecked Sendable {
             self.eventTap = nil
             logger.info("HotkeyManager event tap stopped.")
         }
+    }
+
+    private func cancelControlHold() {
+        controlHoldTimer?.cancel()
+        controlHoldTimer = nil
+        isControlActive = false
+        hadOtherKeyPressed = false
     }
 
     private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -86,42 +102,79 @@ public final class HotkeyManager: @unchecked Sendable {
             return Unmanaged.passUnretained(event)
         }
 
-        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let flags = event.flags
-
-        let isSpace = (keyCode == Config.Hotkey.spaceKeyCode)
+        let hasControl = flags.contains(.maskControl)
+        let hasCmd = flags.contains(.maskCommand)
         let hasOption = flags.contains(.maskAlternate)
         let hasShift = flags.contains(.maskShift)
-        let hasCmd = flags.contains(.maskCommand)
-        let hasControl = flags.contains(.maskControl)
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
 
-        // Ignore if Command or Control is held
-        guard !hasCmd && !hasControl else {
+        // 1. Any regular key press (like C in Ctrl+C, or letters) cancels the hold timer
+        if type == .keyDown {
+            if isControlActive {
+                hadOtherKeyPressed = true
+                cancelControlHold()
+            }
             return Unmanaged.passUnretained(event)
         }
 
-        let now = CACurrentMediaTime()
+        // 2. Modifier key changes (Control pressed or released)
+        if type == .flagsChanged {
+            let isControlKey = (keyCode == 59 || keyCode == 62) // Left or Right Control key
 
-        if type == .keyDown {
-            if isSpace && hasOption {
-                // Immediate keyDown trigger with debounce
-                if now - lastToggleTime >= Config.Hotkey.debounceIntervalSeconds {
-                    lastToggleTime = now
-                    let action: HotkeyAction = hasShift ? .transform : .dictate
-                    logger.info("Instant hotkey trigger detected: \(String(describing: action))")
-
-                    DispatchQueue.main.async { [weak self] in
-                        guard let self = self else { return }
-                        self.delegate?.hotkeyManagerDidTriggerAction(self, action: action)
-                    }
+            if hasControl {
+                // If Command or Option are held, this is a system shortcut (ignore)
+                if hasCmd || hasOption {
+                    cancelControlHold()
+                    return Unmanaged.passUnretained(event)
                 }
-                // Swallow space keydown
-                return nil
-            }
-        } else if type == .keyUp {
-            if isSpace && hasOption {
-                // Swallow space keyup
-                return nil
+
+                // If currently recording, pressing Control stops recording immediately!
+                if isRecording && isControlKey {
+                    let now = CACurrentMediaTime()
+                    if now - lastToggleTime >= Config.Hotkey.debounceIntervalSeconds {
+                        lastToggleTime = now
+                        logger.info("Control pressed while recording -> Stopping session")
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self = self else { return }
+                            self.delegate?.hotkeyManagerDidTriggerAction(self, action: .dictate)
+                        }
+                    }
+                    return Unmanaged.passUnretained(event)
+                }
+
+                // Not recording: starting Control hold
+                if isControlKey && !isControlActive && !isRecording {
+                    isControlActive = true
+                    hadOtherKeyPressed = false
+
+                    let action: HotkeyAction = hasShift ? .transform : .dictate
+
+                    // Schedule trigger after holding Control for ~1.1s (1 to <2s)
+                    let holdItem = DispatchWorkItem { [weak self] in
+                        guard let self = self,
+                              self.isControlActive,
+                              !self.hadOtherKeyPressed,
+                              !self.isRecording else { return }
+
+                        let now = CACurrentMediaTime()
+                        self.lastToggleTime = now
+                        self.logger.info("Control held for \(Config.Hotkey.controlHoldDurationSeconds)s -> Triggering \(String(describing: action))")
+
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self = self else { return }
+                            self.delegate?.hotkeyManagerDidTriggerAction(self, action: action)
+                        }
+                    }
+
+                    self.controlHoldTimer = holdItem
+                    DispatchQueue.main.asyncAfter(deadline: .now() + Config.Hotkey.controlHoldDurationSeconds, execute: holdItem)
+                }
+            } else {
+                // Control released
+                if isControlActive {
+                    cancelControlHold()
+                }
             }
         }
 

@@ -95,7 +95,7 @@ public enum Config {
 
     // MARK: - Hotkey Configuration
     public enum Hotkey {
-        public static let spaceKeyCode: UInt16 = 49
+        public static let controlHoldDurationSeconds: TimeInterval = 1.10
         public static let debounceIntervalSeconds: TimeInterval = 0.22
     }
 }

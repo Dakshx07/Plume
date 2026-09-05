@@ -8,8 +8,7 @@ let package = Package(
         .executableTarget(
             name: "VoiceFlow",
             path: "Sources/VoiceFlow",
-            exclude: ["Info.plist"],
-            resources: []
+            exclude: ["Info.plist", "Resources"]
         )
     ]
 )

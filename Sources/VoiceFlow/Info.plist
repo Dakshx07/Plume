@@ -18,6 +18,8 @@
     <true/>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Plume needs microphone access to transcribe your speech.</string>
 </dict>

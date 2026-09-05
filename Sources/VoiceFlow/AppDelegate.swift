@@ -75,13 +75,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         menu.addItem(NSMenuItem.separator())
 
         // 2. Start / Stop Recording action item
-        let recordItem = NSMenuItem(title: "Dictate (⌥ Space)", action: #selector(toggleRecordingFromMenu), keyEquivalent: "")
+        let recordItem = NSMenuItem(title: "Dictate (Hold Control ~1s)", action: #selector(toggleRecordingFromMenu), keyEquivalent: "")
         recordItem.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Record")
         recordItem.target = self
         menu.addItem(recordItem)
         self.menuRecordItem = recordItem
 
-        let transformItem = NSMenuItem(title: "Transform Selection (⇧ ⌥ Space)", action: #selector(toggleTransformFromMenu), keyEquivalent: "")
+        let transformItem = NSMenuItem(title: "Transform Selection (Hold ⇧ Control ~1s)", action: #selector(toggleTransformFromMenu), keyEquivalent: "")
         transformItem.image = NSImage(systemSymbolName: "wand.and.stars", accessibilityDescription: "Transform")
         transformItem.target = self
         menu.addItem(transformItem)
@@ -176,7 +176,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
             menuRecordItem?.title = "Stop Recording"
             menuRecordItem?.image = NSImage(systemSymbolName: "stop.circle.fill", accessibilityDescription: "Stop")
         } else {
-            menuRecordItem?.title = "Dictate (⌥ Space)"
+            menuRecordItem?.title = "Dictate (Hold Control ~1s)"
             menuRecordItem?.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Record")
 
             switch state {
@@ -285,7 +285,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         // 1. Show UI INSTANTLY (< 15ms)
         OverlayWindowController.shared.showListening(isTransform: isTransform)
         state = .recording
-        updateMenuStatus(text: "Status: 🔴 Recording...", isRecording: true)
+        hotkeyManager.isRecording = true
+        updateMenuStatus(text: "Status: Recording...", isRecording: true)
 
         // 2. Start audio capture (engine is already pre-warmed)
         guard Permissions.shared.isMicrophoneGranted else {
@@ -310,6 +311,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         guard state == .recording else { return }
 
         state = .transcribing
+        hotkeyManager.isRecording = false
         updateMenuStatus(text: "Status: Finishing...", isRecording: false)
         // Flow the Bot takes the full pill stage and begins its in-pill playground!
         OverlayWindowController.shared.startProcessing()
@@ -512,6 +514,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self = self else { return }
             self.state = .idle
+            self.hotkeyManager.isRecording = false
             self.sessionMode = .dictate
             self.updateMenuStatus(text: "Status: Ready")
         }
