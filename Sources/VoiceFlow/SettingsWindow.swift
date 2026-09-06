@@ -1,5 +1,34 @@
 import AppKit
 
+private class SettingsWindow: NSWindow {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags == .command {
+            switch event.charactersIgnoringModifiers {
+            case "v":
+                if NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: self) {
+                    return true
+                }
+            case "c":
+                if NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: self) {
+                    return true
+                }
+            case "x":
+                if NSApp.sendAction(#selector(NSText.cut(_:)), to: nil, from: self) {
+                    return true
+                }
+            case "a":
+                if NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: self) {
+                    return true
+                }
+            default:
+                break
+            }
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
 public final class SettingsWindowController: NSWindowController {
     public static let shared = SettingsWindowController()
 
@@ -20,7 +49,7 @@ public final class SettingsWindowController: NSWindowController {
     private var micStatusBadge: NSTextField!
 
     public init() {
-        let window = NSWindow(
+        let window = SettingsWindow(
             contentRect: NSRect(x: 0, y: 0, width: 480, height: 490),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
@@ -98,20 +127,31 @@ public final class SettingsWindowController: NSWindowController {
         geminiCard.addSubview(geminiDescLabel)
 
         // Secure Key Field (bullets)
-        geminiSecureField = NSSecureTextField(frame: NSRect(x: 16, y: geminiCardHeight - 74, width: 362, height: 26))
+        geminiSecureField = NSSecureTextField(frame: NSRect(x: 16, y: geminiCardHeight - 74, width: 300, height: 26))
         geminiSecureField.placeholderString = "Paste Gemini API Key (AIza...)"
         geminiSecureField.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
         geminiCard.addSubview(geminiSecureField)
 
         // Plaintext Key Field (revealed on eye click, hidden by default)
-        geminiPlainField = NSTextField(frame: NSRect(x: 16, y: geminiCardHeight - 74, width: 362, height: 26))
+        geminiPlainField = NSTextField(frame: NSRect(x: 16, y: geminiCardHeight - 74, width: 300, height: 26))
         geminiPlainField.placeholderString = "Paste Gemini API Key (AIza...)"
         geminiPlainField.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
         geminiPlainField.isHidden = true
         geminiCard.addSubview(geminiPlainField)
 
+        // Paste Button (One-click clipboard paste)
+        let pasteBtn = NSButton(frame: NSRect(x: 324, y: geminiCardHeight - 74, width: 62, height: 26))
+        pasteBtn.title = "Paste"
+        pasteBtn.bezelStyle = .rounded
+        pasteBtn.font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        pasteBtn.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "Paste from clipboard")
+        pasteBtn.imagePosition = .imageLeading
+        pasteBtn.target = self
+        pasteBtn.action = #selector(pasteFromClipboard)
+        geminiCard.addSubview(pasteBtn)
+
         // Eye Toggle Button
-        eyeButton = NSButton(frame: NSRect(x: 386, y: geminiCardHeight - 74, width: 30, height: 26))
+        eyeButton = NSButton(frame: NSRect(x: 390, y: geminiCardHeight - 74, width: 28, height: 26))
         eyeButton.bezelStyle = .rounded
         eyeButton.image = NSImage(systemSymbolName: "eye", accessibilityDescription: "Toggle visibility")
         eyeButton.imagePosition = .imageOnly
@@ -314,6 +354,19 @@ public final class SettingsWindowController: NSWindowController {
             geminiSecureField.isHidden = false
             window?.makeFirstResponder(geminiSecureField)
             eyeButton.image = NSImage(systemSymbolName: "eye", accessibilityDescription: "Reveal Key")
+        }
+    }
+
+    @objc private func pasteFromClipboard() {
+        if let str = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), !str.isEmpty {
+            geminiSecureField.stringValue = str
+            geminiPlainField.stringValue = str
+            updateConfigStatus()
+            configStatusLabel.stringValue = "📋 Pasted! Remember to click Save"
+            configStatusLabel.textColor = .systemBlue
+        } else {
+            configStatusLabel.stringValue = "⚠️ Clipboard is empty"
+            configStatusLabel.textColor = .systemOrange
         }
     }
 

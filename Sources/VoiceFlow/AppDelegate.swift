@@ -38,6 +38,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         NSApplication.shared.setActivationPolicy(.accessory)
 
         cleanupTemporaryFiles()
+        setupMainMenu()
         setupMenuBar()
         setupAudioRecorder()
         setupHotkey()
@@ -69,6 +70,46 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
                 }
             }
         }
+    }
+
+    // MARK: - Main Menu (Edit & Standard Shortcuts for Cut/Copy/Paste)
+
+    private func setupMainMenu() {
+        let mainMenu = NSMenu()
+
+        // 1. App menu
+        let appMenuItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(NSMenuItem(title: "About Plume", action: #selector(showAbout), keyEquivalent: ""))
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(NSMenuItem(title: "Quit Plume", action: #selector(quitApp), keyEquivalent: "q"))
+        appMenuItem.submenu = appMenu
+        mainMenu.addItem(appMenuItem)
+
+        // 2. Edit menu (Enables Cmd+C, Cmd+V, Cmd+X, Cmd+A, Cmd+Z in all text fields)
+        let editMenuItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+
+        let undoItem = NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        let redoItem = NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(undoItem)
+        editMenu.addItem(redoItem)
+        editMenu.addItem(NSMenuItem.separator())
+
+        let cutItem = NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        let copyItem = NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        let pasteItem = NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        let selectAllItem = NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        editMenu.addItem(cutItem)
+        editMenu.addItem(copyItem)
+        editMenu.addItem(pasteItem)
+        editMenu.addItem(selectAllItem)
+
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+
+        NSApplication.shared.mainMenu = mainMenu
     }
 
     // MARK: - Menu Bar Setup (Flow the Bot Living Status Item)
