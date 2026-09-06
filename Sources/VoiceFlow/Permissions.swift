@@ -71,6 +71,11 @@ public final class Permissions {
         }
     }
 
+    public func revealInFinder() {
+        let appURL = URL(fileURLWithPath: "/Applications/Plume.app")
+        NSWorkspace.shared.activateFileViewerSelecting([appURL])
+    }
+
     // MARK: - Text Insertion
 
     public func insertText(_ text: String, completion: ((Bool) -> Void)? = nil) {

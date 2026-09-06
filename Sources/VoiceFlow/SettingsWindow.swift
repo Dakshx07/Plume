@@ -18,7 +18,6 @@ public final class SettingsWindowController: NSWindowController {
     private var configStatusLabel: NSTextField!
     private var axStatusBadge: NSTextField!
     private var micStatusBadge: NSTextField!
-    private var inputStatusBadge: NSTextField!
 
     public init() {
         let window = NSWindow(
@@ -138,7 +137,7 @@ public final class SettingsWindowController: NSWindowController {
         currentY -= (geminiCardHeight + 16)
 
         // CARD 2: macOS Permissions Status
-        let permCardHeight: CGFloat = 132
+        let permCardHeight: CGFloat = 112
         let permCard = createCardView(frame: NSRect(x: 24, y: currentY - permCardHeight, width: 432, height: permCardHeight))
         contentView.addSubview(permCard)
 
@@ -162,7 +161,7 @@ public final class SettingsWindowController: NSWindowController {
         axLabel.frame = NSRect(x: 16, y: permCardHeight - 52, width: 120, height: 16)
         permCard.addSubview(axLabel)
 
-        let axDesc = NSTextField(labelWithString: "Required to paste transcribed text into active applications")
+        let axDesc = NSTextField(labelWithString: "Required to capture global hotkey and paste transcribed text")
         axDesc.font = NSFont.systemFont(ofSize: 10, weight: .regular)
         axDesc.textColor = .secondaryLabelColor
         axDesc.frame = NSRect(x: 16, y: permCardHeight - 68, width: 300, height: 14)
@@ -174,28 +173,36 @@ public final class SettingsWindowController: NSWindowController {
         // Row 2: Microphone
         let micLabel = NSTextField(labelWithString: "Microphone")
         micLabel.font = NSFont.systemFont(ofSize: 12, weight: .medium)
-        micLabel.frame = NSRect(x: 16, y: permCardHeight - 92, width: 120, height: 16)
+        micLabel.frame = NSRect(x: 16, y: permCardHeight - 88, width: 120, height: 16)
         permCard.addSubview(micLabel)
 
         let micDesc = NSTextField(labelWithString: "Required for capturing voice input locally")
         micDesc.font = NSFont.systemFont(ofSize: 10, weight: .regular)
         micDesc.textColor = .secondaryLabelColor
-        micDesc.frame = NSRect(x: 16, y: permCardHeight - 108, width: 300, height: 14)
+        micDesc.frame = NSRect(x: 16, y: permCardHeight - 104, width: 300, height: 14)
         permCard.addSubview(micDesc)
 
-        micStatusBadge = createBadge(frame: NSRect(x: 334, y: permCardHeight - 102, width: 82, height: 20))
+        micStatusBadge = createBadge(frame: NSRect(x: 334, y: permCardHeight - 98, width: 82, height: 20))
         permCard.addSubview(micStatusBadge)
 
-        // Row 3: Input Monitoring
-        let inLabel = NSTextField(labelWithString: "Input Monitoring")
-        inLabel.font = NSFont.systemFont(ofSize: 12, weight: .medium)
-        inLabel.frame = NSRect(x: 16, y: permCardHeight - 132, width: 120, height: 16)
-        permCard.addSubview(inLabel)
+        currentY -= (permCardHeight + 8)
 
-        inputStatusBadge = createBadge(frame: NSRect(x: 334, y: permCardHeight - 138, width: 82, height: 20))
-        permCard.addSubview(inputStatusBadge)
+        // Helper: If app not listed in System Settings
+        let helperLabel = NSTextField(labelWithString: "Not in Settings list? Click '+' in Settings or:")
+        helperLabel.font = NSFont.systemFont(ofSize: 11, weight: .regular)
+        helperLabel.textColor = .secondaryLabelColor
+        helperLabel.frame = NSRect(x: 24, y: currentY - 20, width: 250, height: 18)
+        contentView.addSubview(helperLabel)
 
-        currentY -= (permCardHeight + 16)
+        let revealBtn = NSButton(frame: NSRect(x: 276, y: currentY - 22, width: 180, height: 22))
+        revealBtn.title = "📂 Reveal Plume in Finder"
+        revealBtn.bezelStyle = .inline
+        revealBtn.font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        revealBtn.target = self
+        revealBtn.action = #selector(revealInFinderClicked)
+        contentView.addSubview(revealBtn)
+
+        currentY -= (24 + 12)
 
         // CARD 3: Quick Guide / Global Shortcut
         let shortcutCardHeight: CGFloat = 46
@@ -362,20 +369,22 @@ public final class SettingsWindowController: NSWindowController {
 
     @objc private func checkPermissionsClicked() {
         if !Permissions.shared.isAccessibilityGranted {
-            Permissions.shared.openAccessibilitySettings()
             Permissions.shared.requestAccessibility()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                Permissions.shared.openAccessibilitySettings()
+            }
         }
         if !Permissions.shared.isMicrophoneGranted {
             Permissions.shared.requestMicrophone { [weak self] _ in
                 self?.updatePermissionsStatus()
             }
         }
-        if !Permissions.shared.isInputMonitoringGranted {
-            Permissions.shared.openInputMonitoringSettings()
-            Permissions.shared.requestInputMonitoring()
-        }
         AppDelegate.shared.attemptStartHotkey()
         updatePermissionsStatus()
+    }
+
+    @objc private func revealInFinderClicked() {
+        Permissions.shared.revealInFinder()
     }
 
     public func updatePermissionsStatus() {
@@ -383,10 +392,8 @@ public final class SettingsWindowController: NSWindowController {
 
         let ax = Permissions.shared.isAccessibilityGranted
         let mic = Permissions.shared.isMicrophoneGranted
-        let input = Permissions.shared.isInputMonitoringGranted
 
         setBadgeState(axStatusBadge, isGranted: ax)
         setBadgeState(micStatusBadge, isGranted: mic)
-        setBadgeState(inputStatusBadge, isGranted: input, grantedText: "Active")
     }
 }

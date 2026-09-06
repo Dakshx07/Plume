@@ -81,16 +81,14 @@ rm -f "$TMP_ZIP"
 xattr -cr "/Applications/Plume.app" 2>/dev/null || true
 chmod +x "/Applications/Plume.app/Contents/MacOS/Plume"
 
-# Clear stale TCC caches from earlier attempts so macOS creates a clean, valid entry
-tccutil reset Accessibility com.dakshhiran.Plume 2>/dev/null || true
-tccutil reset ListenEvent com.dakshhiran.Plume 2>/dev/null || true
-
-# Code sign with persistent designated requirement so TCC never invalidates
-DEV_ID=$(security find-identity -p codesigning -v 2>/dev/null | grep "Apple Development" | head -n 1 | awk -F'"' '{print $2}' || true)
-if [ -n "$DEV_ID" ]; then
-    codesign --force --deep --sign "$DEV_ID" --identifier "com.dakshhiran.Plume" "/Applications/Plume.app" 2>/dev/null || true
-else
-    codesign --force --deep -s - --identifier "com.dakshhiran.Plume" -r='designated => identifier "com.dakshhiran.Plume"' "/Applications/Plume.app" 2>/dev/null || true
+# Verify code signature or sign with local identity
+if ! codesign -v "/Applications/Plume.app" 2>/dev/null; then
+    DEV_ID=$(security find-identity -p codesigning -v 2>/dev/null | grep "Apple Development" | head -n 1 | awk -F'"' '{print $2}' || true)
+    if [ -n "$DEV_ID" ]; then
+        codesign --force --deep --sign "$DEV_ID" --identifier "com.dakshhiran.Plume" "/Applications/Plume.app" 2>/dev/null || true
+    else
+        codesign --force --deep --sign - --identifier "com.dakshhiran.Plume" "/Applications/Plume.app" 2>/dev/null || true
+    fi
 fi
 
 # 5. Configure Auto-Start at Login
@@ -129,7 +127,8 @@ echo -e "${GREEN}${BOLD}✓ Plume successfully installed and running!${RESET}"
 echo -e "${GREEN}${BOLD}═══════════════════════════════════════════════════════${RESET}"
 echo ""
 echo -e "${BOLD}How to use:${RESET}"
-echo -e "1. ${CYAN}Permissions:${RESET} Allow ${BOLD}Accessibility${RESET} & ${BOLD}Input Monitoring${RESET} when macOS prompts."
+echo -e "1. ${CYAN}Permissions:${RESET} Allow ${BOLD}Accessibility${RESET} when macOS prompts."
+echo -e "   (If not listed in Settings, click '+' in System Settings > Accessibility and add Plume)."
 echo -e "2. ${CYAN}Dictate:${RESET} Press ${BOLD}Control twice (⌃ ⌃)${RESET} anywhere, speak, and tap ${BOLD}⌃${RESET} once to type!"
 echo -e "3. ${CYAN}Menu Bar:${RESET} Look for Flow the Bot mascot in your top menu bar."
 echo ""

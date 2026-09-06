@@ -62,6 +62,11 @@ cat <<EOF > "$PLIST_FILE"
 </plist>
 EOF
 
+mkdir -p dist
+rm -f dist/Plume.zip
+(cd /Applications && zip -q -r "$DIR/dist/Plume.zip" "Plume.app")
+
 echo "✓ Plume installed successfully at $APP_BUNDLE"
+echo "✓ Pre-built dist/Plume.zip updated"
 echo "✓ LaunchAgent configured at $PLIST_FILE"
 echo "Plume is now ready to run automatically whenever you log into your Mac!"

@@ -42,6 +42,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         setupAudioRecorder()
         setupHotkey()
 
+        if !Permissions.shared.isAccessibilityGranted {
+            Permissions.shared.requestAccessibility()
+        }
+
         checkPrerequisites()
 
         logger.info("Plume launched successfully.")
@@ -581,12 +585,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
     @objc private func checkPermissions() {
         let mic = Permissions.shared.isMicrophoneGranted ? "✓ Granted" : "✗ Missing"
         let acc = Permissions.shared.isAccessibilityGranted ? "✓ Granted" : "✗ Missing"
-        let inp = Permissions.shared.isInputMonitoringGranted ? "✓ Granted" : "✗ Missing"
 
         let message = """
         Microphone: \(mic)
         Accessibility: \(acc)
-        Input Monitoring: \(inp)
         """
 
         let alert = NSAlert()
