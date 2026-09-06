@@ -54,6 +54,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
 
     public func applicationWillTerminate(_ notification: Notification) {
         hotkeyManager.stop()
+        MediaVolumeManager.shared.restore()
         audioRecorder.stopRecording()
         audioRecorder.cleanup()
         cleanupTemporaryFiles()
@@ -268,7 +269,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
 
     private func setupAudioRecorder() {
         audioRecorder.delegate = self
-        audioRecorder.prewarm()
     }
 
     private var hotkeyRetryTimer: Timer?
@@ -376,7 +376,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
         hotkeyManager.isRecording = true
         updateMenuStatus(text: "Status: Recording...", isRecording: true)
 
-        // 2. Start audio capture (engine is already pre-warmed)
+        // 2. Duck active media (e.g. Spotify) so microphone captures speech cleanly
+        MediaVolumeManager.shared.duckIfPlaying()
+
+        // 3. Start audio capture
         guard Permissions.shared.isMicrophoneGranted else {
             Permissions.shared.requestMicrophone { [weak self] granted in
                 guard let self = self else { return }
@@ -397,6 +400,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
 
     private func stopRecordingAndTranscribe() {
         guard state == .recording else { return }
+
+        // Restore media volume immediately
+        MediaVolumeManager.shared.restore()
 
         state = .transcribing
         hotkeyManager.isRecording = false
@@ -592,6 +598,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDe
     // MARK: - Error & Notification Helpers
 
     private func showOverlayError(_ message: String) {
+        MediaVolumeManager.shared.restore()
         state = .error
         updateMenuStatus(text: "Status: Error")
         OverlayWindowController.shared.showError(message)

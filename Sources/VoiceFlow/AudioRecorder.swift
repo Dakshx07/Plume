@@ -49,36 +49,11 @@ public final class AudioRecorder: NSObject, @unchecked Sendable {
     public override init() {
         super.init()
         setupNotificationObservers()
-        prewarm()
     }
 
     deinit {
         NotificationCenter.default.removeObserver(self)
         stopRecording()
-    }
-
-    // MARK: - Pre-Warming Engine (Sub-Millisecond Startup)
-
-    public func prewarm() {
-        processingQueue.async { [weak self] in
-            guard let self = self, self.audioEngine == nil else { return }
-            _ = self.getOrInitEngine()
-        }
-    }
-
-    private func getOrInitEngine() -> AVAudioEngine {
-        if let existing = self.audioEngine {
-            return existing
-        }
-        let engine = AVAudioEngine()
-        do {
-            try engine.inputNode.setVoiceProcessingEnabled(true)
-            logger.info("Voice processing pre-warmed successfully.")
-        } catch {
-            logger.warning("Voice processing setup note: \(error.localizedDescription)")
-        }
-        self.audioEngine = engine
-        return engine
     }
 
     private func setupNotificationObservers() {
@@ -112,21 +87,9 @@ public final class AudioRecorder: NSObject, @unchecked Sendable {
             throw AudioRecorderError.microphoneNotAuthorized
         }
 
-        let engine = getOrInitEngine()
+        // 2. Fresh audio engine without system voice processing (zero background ducking of other apps)
+        let engine = AVAudioEngine()
         let inputNode = engine.inputNode
-
-        // 3. Apple's built-in VAD (macOS 14+)
-        #if compiler(>=5.9)
-        if #available(macOS 14.0, *) {
-            _ = inputNode.setMutedSpeechActivityEventListener { [weak self] event in
-                guard let self = self, self.isRecording else { return }
-                if event == .ended {
-                    // Speech ended according to Apple VAD
-                    self.logger.debug("Apple VAD reported speech activity ended.")
-                }
-            }
-        }
-        #endif
 
         // 4. Setup Formats
         let hwFormat = inputNode.inputFormat(forBus: 0)
@@ -221,8 +184,8 @@ public final class AudioRecorder: NSObject, @unchecked Sendable {
             }
 
             let db = 20.0 * log10(max(rms, 1e-5))
-            // Normalize dB (-60dB...0dB) to 0.0...1.0
-            let normalized = max(0.0, min(1.0, (db + 60.0) / 60.0))
+            // Map -50 dB ... -15 dB smoothly to 0.0 ... 1.0 for lively UI waveforms
+            let normalized = max(0.0, min(1.0, (db + 50.0) / 35.0))
 
             // Notify UI
             DispatchQueue.main.async {
@@ -306,6 +269,8 @@ public final class AudioRecorder: NSObject, @unchecked Sendable {
         if let engine = audioEngine {
             engine.inputNode.removeTap(onBus: 0)
             engine.stop()
+            engine.reset()
+            self.audioEngine = nil
         }
 
         // Wait synchronously for all queued buffers to finish writing before closing audioFile

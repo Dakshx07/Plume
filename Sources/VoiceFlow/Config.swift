@@ -95,8 +95,8 @@ public enum Config {
     public enum Audio {
         public static let sampleRate: Double = 16000.0
         public static let channelCount: UInt32 = 1
-        public static let silenceThresholdDB: Float = -35.0
-        public static let silenceDurationSeconds: TimeInterval = 1.20
+        public static let silenceThresholdDB: Float = -45.0
+        public static let silenceDurationSeconds: TimeInterval = 2.80
         public static let minRecordingDurationSeconds: TimeInterval = 0.5
         public static let maxRecordingDurationSeconds: TimeInterval = 120.0
     }
