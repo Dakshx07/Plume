@@ -244,7 +244,7 @@ public final class SettingsWindowController: NSWindowController {
         currentY -= (permCardHeight + 8)
 
         // Helper: If app not listed in System Settings
-        let helperLabel = NSTextField(labelWithString: "Not in Settings list? Click '+' in Settings or:")
+        let helperLabel = NSTextField(labelWithString: "Not listed? Drag Plume from Finder into Settings:")
         helperLabel.font = NSFont.systemFont(ofSize: 11, weight: .regular)
         helperLabel.textColor = .secondaryLabelColor
         helperLabel.frame = NSRect(x: 24, y: currentY - 20, width: 250, height: 18)

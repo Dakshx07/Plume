@@ -77,11 +77,22 @@ fi
 unzip -q -o "$TMP_ZIP" -d "/Applications"
 rm -f "$TMP_ZIP"
 
-# Clear quarantine flags and ensure execution permissions
+# Clear quarantine flags and all extended attributes thoroughly
 xattr -cr "/Applications/Plume.app" 2>/dev/null || true
+xattr -dr com.apple.quarantine "/Applications/Plume.app" 2>/dev/null || true
 chmod +x "/Applications/Plume.app/Contents/MacOS/Plume"
 
-# Clear old entries from both legacy and new identifiers
+# Cleanly sign the bundle with standard ad-hoc signature on this Mac
+codesign --force --deep -s - "/Applications/Plume.app"
+
+# Force register with macOS LaunchServices so System Settings and Finder immediately index Plume.app
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f -R "/Applications/Plume.app" 2>/dev/null || true
+touch "/Applications/Plume.app"
+
+# Close System Settings if open so its cache refreshes
+killall "System Settings" 2>/dev/null || true
+
+# Clear old entries from both legacy and new identifiers to ensure clean permission prompt
 tccutil reset Accessibility com.dakshhiran.Plume 2>/dev/null || true
 tccutil reset ListenEvent com.dakshhiran.Plume 2>/dev/null || true
 tccutil reset Accessibility com.dakshhiran.PlumeApp 2>/dev/null || true
@@ -124,7 +135,8 @@ echo -e "${GREEN}${BOLD}══════════════════�
 echo ""
 echo -e "${BOLD}How to use:${RESET}"
 echo -e "1. ${CYAN}Permissions:${RESET} Allow ${BOLD}Accessibility${RESET} when macOS prompts."
-echo -e "   (If you just toggled Plume ON in System Settings, click ${BOLD}'Relaunch Plume'${RESET} in Plume Settings to apply!)"
+echo -e "   • If Plume is not in the list: Click ${BOLD}'+'${RESET} in Settings to add it, or drag ${BOLD}Plume.app${RESET} from Finder into the window."
+echo -e "   • After toggling Plume ON in Settings, click ${BOLD}'Relaunch Plume'${RESET} in Plume Settings to apply!"
 echo -e "2. ${CYAN}Dictate:${RESET} Press ${BOLD}Control twice (⌃ ⌃)${RESET} anywhere, speak, and tap ${BOLD}⌃${RESET} once to type!"
 echo -e "3. ${CYAN}Menu Bar:${RESET} Look for Flow the Bot mascot in your top menu bar."
 echo ""

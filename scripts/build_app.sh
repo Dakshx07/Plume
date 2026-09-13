@@ -24,10 +24,13 @@ fi
 
 chmod +x "$APP_BUNDLE/Contents/MacOS/Plume"
 
-# Sign with universal designated requirement so every Mac shares the exact same identity
-echo "Signing with universal designated requirement..."
-codesign --force --deep -s - --identifier "com.dakshhiran.PlumeApp" -r='designated => identifier "com.dakshhiran.PlumeApp"' "$APP_BUNDLE"
+# Clear any extended attributes and sign with clean, standard ad-hoc signature
+echo "Signing application bundle with standard ad-hoc signature..."
+xattr -cr "$APP_BUNDLE" 2>/dev/null || true
+codesign --force --deep -s - "$APP_BUNDLE"
 
+# Force register with macOS LaunchServices so the system recognizes Plume.app as a valid app bundle
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f -R "$APP_BUNDLE" 2>/dev/null || true
 touch "$APP_BUNDLE"
 
 # Configure LaunchAgent for auto-start at login

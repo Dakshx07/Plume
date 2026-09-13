@@ -20,6 +20,14 @@
     <string>13.0</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
+    <key>CFBundleDisplayName</key>
+    <string>Plume</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>MacOSX</string>
+    </array>
     <key>NSMicrophoneUsageDescription</key>
     <string>Plume needs microphone access to transcribe your speech.</string>
 </dict>

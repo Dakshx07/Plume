@@ -106,16 +106,22 @@ fi
 
 chmod +x "$APP_BUNDLE/Contents/MacOS/Plume"
 
-# Reset stale TCC database entries so macOS doesn't reject updated binaries as ghost permissions
+# 7. Code Signing with clean standard ad-hoc signature
+echo -e "  Signing application bundle..."
+xattr -cr "$APP_BUNDLE" 2>/dev/null || true
+xattr -dr com.apple.quarantine "$APP_BUNDLE" 2>/dev/null || true
+codesign --force --deep -s - "$APP_BUNDLE"
+
+# Force register with macOS LaunchServices
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f -R "$APP_BUNDLE" 2>/dev/null || true
+touch "$APP_BUNDLE"
+
+# Reset stale TCC database entries so macOS doesn't reject updated binaries
 tccutil reset Accessibility com.dakshhiran.Plume 2>/dev/null || true
 tccutil reset ListenEvent com.dakshhiran.Plume 2>/dev/null || true
 tccutil reset Accessibility com.dakshhiran.PlumeApp 2>/dev/null || true
 tccutil reset ListenEvent com.dakshhiran.PlumeApp 2>/dev/null || true
-
-# 7. Code Signing with universal designated requirement
-echo -e "  Signing with universal designated requirement..."
-codesign --force --deep -s - --identifier "com.dakshhiran.PlumeApp" -r='designated => identifier "com.dakshhiran.PlumeApp"' "$APP_BUNDLE"
-touch "$APP_BUNDLE"
+killall "System Settings" 2>/dev/null || true
 
 # 8. Configure Auto-Start at Login (LaunchAgent)
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
