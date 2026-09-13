@@ -96,9 +96,9 @@ public final class Permissions {
     public func resetAccessibilityTCC() {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
-        task.arguments = ["reset", "Accessibility", "com.dakshhiran.Plume"]
+        task.arguments = ["reset", "Accessibility", Config.bundleIdentifier]
         try? task.run()
-        logger.info("Executed tccutil reset Accessibility for com.dakshhiran.Plume")
+        logger.info("Executed tccutil reset Accessibility for \(Config.bundleIdentifier)")
     }
 
     // MARK: - Text Insertion

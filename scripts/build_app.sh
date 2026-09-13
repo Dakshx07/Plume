@@ -24,21 +24,15 @@ fi
 
 chmod +x "$APP_BUNDLE/Contents/MacOS/Plume"
 
-# Detect Developer Identity for permanent TCC permissions
-DEV_ID=$(security find-identity -p codesigning -v | grep "Apple Development" | head -n 1 | awk -F'"' '{print $2}')
-if [ -n "$DEV_ID" ]; then
-    echo "Signing with Developer Identity: $DEV_ID"
-    codesign --force --deep --sign "$DEV_ID" --identifier "com.dakshhiran.Plume" "$APP_BUNDLE"
-else
-    echo "Signing ad-hoc with designated requirement..."
-    codesign --force --deep -s - --identifier "com.dakshhiran.Plume" -r='designated => identifier "com.dakshhiran.Plume"' "$APP_BUNDLE"
-fi
+# Sign with universal designated requirement so every Mac shares the exact same identity
+echo "Signing with universal designated requirement..."
+codesign --force --deep -s - --identifier "com.dakshhiran.PlumeApp" -r='designated => identifier "com.dakshhiran.PlumeApp"' "$APP_BUNDLE"
 
 touch "$APP_BUNDLE"
 
 # Configure LaunchAgent for auto-start at login
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
-PLIST_FILE="$LAUNCH_AGENTS_DIR/com.dakshhiran.plume.plist"
+PLIST_FILE="$LAUNCH_AGENTS_DIR/com.dakshhiran.plumeapp.plist"
 mkdir -p "$LAUNCH_AGENTS_DIR"
 
 cat <<EOF > "$PLIST_FILE"
@@ -47,7 +41,7 @@ cat <<EOF > "$PLIST_FILE"
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.dakshhiran.plume</string>
+    <string>com.dakshhiran.PlumeApp</string>
     <key>ProgramArguments</key>
     <array>
         <string>$APP_BUNDLE/Contents/MacOS/Plume</string>

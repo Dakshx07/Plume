@@ -4,7 +4,7 @@ import os.log
 public enum Config {
     // MARK: - App Identity
     public static let appName = "Plume"
-    public static let bundleIdentifier = "com.dakshhiran.Plume"
+    public static let bundleIdentifier = "com.dakshhiran.PlumeApp"
 
     // MARK: - Logger
     public static let logger = Logger(subsystem: "com.dakshhiran.plume", category: "App")

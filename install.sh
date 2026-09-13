@@ -81,22 +81,16 @@ rm -f "$TMP_ZIP"
 xattr -cr "/Applications/Plume.app" 2>/dev/null || true
 chmod +x "/Applications/Plume.app/Contents/MacOS/Plume"
 
-# Reset stale TCC database entries so macOS doesn't reject updated binaries as ghost permissions
+# Clear old entries from both legacy and new identifiers
 tccutil reset Accessibility com.dakshhiran.Plume 2>/dev/null || true
 tccutil reset ListenEvent com.dakshhiran.Plume 2>/dev/null || true
-
-# Code sign with persistent designated requirement so TCC never invalidates
-DEV_ID=$(security find-identity -p codesigning -v 2>/dev/null | grep "Apple Development" | head -n 1 | awk -F'"' '{print $2}' || true)
-if [ -n "$DEV_ID" ]; then
-    codesign --force --deep --sign "$DEV_ID" --identifier "com.dakshhiran.Plume" "/Applications/Plume.app" 2>/dev/null || true
-else
-    codesign --force --deep -s - --identifier "com.dakshhiran.Plume" -r='designated => identifier "com.dakshhiran.Plume"' "/Applications/Plume.app" 2>/dev/null || true
-fi
+tccutil reset Accessibility com.dakshhiran.PlumeApp 2>/dev/null || true
+tccutil reset ListenEvent com.dakshhiran.PlumeApp 2>/dev/null || true
 
 # 5. Configure Auto-Start at Login
 echo -e "${BLUE}▶ [4/4] Configuring auto-start...${RESET}"
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
-PLIST_FILE="$LAUNCH_AGENTS_DIR/com.dakshhiran.plume.plist"
+PLIST_FILE="$LAUNCH_AGENTS_DIR/com.dakshhiran.plumeapp.plist"
 mkdir -p "$LAUNCH_AGENTS_DIR"
 
 cat <<EOF > "$PLIST_FILE"
@@ -105,7 +99,7 @@ cat <<EOF > "$PLIST_FILE"
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.dakshhiran.plume</string>
+    <string>com.dakshhiran.PlumeApp</string>
     <key>ProgramArguments</key>
     <array>
         <string>/Applications/Plume.app/Contents/MacOS/Plume</string>
