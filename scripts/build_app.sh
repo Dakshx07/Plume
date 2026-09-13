@@ -31,7 +31,7 @@ if [ -n "$DEV_ID" ]; then
     codesign --force --deep --sign "$DEV_ID" --identifier "com.dakshhiran.Plume" "$APP_BUNDLE"
 else
     echo "Signing ad-hoc with designated requirement..."
-    codesign --force --deep --sign - --identifier "com.dakshhiran.Plume" "$APP_BUNDLE"
+    codesign --force --deep -s - --identifier "com.dakshhiran.Plume" -r='designated => identifier "com.dakshhiran.Plume"' "$APP_BUNDLE"
 fi
 
 touch "$APP_BUNDLE"

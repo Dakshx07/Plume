@@ -76,6 +76,31 @@ public final class Permissions {
         NSWorkspace.shared.activateFileViewerSelecting([appURL])
     }
 
+    // MARK: - Process Relaunch & TCC Reset
+
+    public func relaunchApp() {
+        let bundlePath = Bundle.main.bundlePath
+        let targetPath = bundlePath.hasSuffix(".app") ? bundlePath : "/Applications/Plume.app"
+        logger.info("Relaunching Plume from \(targetPath)...")
+
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "sleep 0.35; open \"\(targetPath)\""]
+        try? task.run()
+
+        DispatchQueue.main.async {
+            NSApp.terminate(nil)
+        }
+    }
+
+    public func resetAccessibilityTCC() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        task.arguments = ["reset", "Accessibility", "com.dakshhiran.Plume"]
+        try? task.run()
+        logger.info("Executed tccutil reset Accessibility for com.dakshhiran.Plume")
+    }
+
     // MARK: - Text Insertion
 
     public func insertText(_ text: String, completion: ((Bool) -> Void)? = nil) {

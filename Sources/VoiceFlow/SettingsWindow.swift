@@ -47,10 +47,12 @@ public final class SettingsWindowController: NSWindowController {
     private var configStatusLabel: NSTextField!
     private var axStatusBadge: NSTextField!
     private var micStatusBadge: NSTextField!
+    private var relaunchBtn: NSButton!
+    private var axHintLabel: NSTextField!
 
     public init() {
         let window = SettingsWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 490),
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 510),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -81,7 +83,7 @@ public final class SettingsWindowController: NSWindowController {
         let contentView = NSView(frame: window.contentView!.bounds)
         window.contentView = contentView
 
-        var currentY: CGFloat = 436
+        var currentY: CGFloat = 456
 
         // Header: App branding & subtitle
         let iconBadge = NSImageView(frame: NSRect(x: 24, y: currentY - 2, width: 32, height: 32))
@@ -177,53 +179,67 @@ public final class SettingsWindowController: NSWindowController {
         currentY -= (geminiCardHeight + 16)
 
         // CARD 2: macOS Permissions Status
-        let permCardHeight: CGFloat = 112
+        let permCardHeight: CGFloat = 142
         let permCard = createCardView(frame: NSRect(x: 24, y: currentY - permCardHeight, width: 432, height: permCardHeight))
         contentView.addSubview(permCard)
 
         let permHeaderLabel = NSTextField(labelWithString: "SYSTEM PERMISSIONS")
         permHeaderLabel.font = NSFont.systemFont(ofSize: 10, weight: .semibold)
         permHeaderLabel.textColor = .secondaryLabelColor
-        permHeaderLabel.frame = NSRect(x: 16, y: permCardHeight - 24, width: 250, height: 14)
+        permHeaderLabel.frame = NSRect(x: 16, y: permCardHeight - 24, width: 180, height: 14)
         permCard.addSubview(permHeaderLabel)
 
-        let checkPermBtn = NSButton(frame: NSRect(x: 290, y: permCardHeight - 28, width: 126, height: 22))
-        checkPermBtn.title = "Verify Permissions"
+        let checkPermBtn = NSButton(frame: NSRect(x: 216, y: permCardHeight - 28, width: 72, height: 22))
+        checkPermBtn.title = "Verify"
         checkPermBtn.bezelStyle = .rounded
         checkPermBtn.font = NSFont.systemFont(ofSize: 11, weight: .medium)
         checkPermBtn.target = self
         checkPermBtn.action = #selector(checkPermissionsClicked)
         permCard.addSubview(checkPermBtn)
 
+        relaunchBtn = NSButton(frame: NSRect(x: 294, y: permCardHeight - 28, width: 122, height: 22))
+        relaunchBtn.title = "🔄 Relaunch Plume"
+        relaunchBtn.bezelStyle = .rounded
+        relaunchBtn.font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+        relaunchBtn.target = self
+        relaunchBtn.action = #selector(relaunchClicked)
+        permCard.addSubview(relaunchBtn)
+
         // Row 1: Accessibility
         let axLabel = NSTextField(labelWithString: "Accessibility")
         axLabel.font = NSFont.systemFont(ofSize: 12, weight: .medium)
-        axLabel.frame = NSRect(x: 16, y: permCardHeight - 52, width: 120, height: 16)
+        axLabel.frame = NSRect(x: 16, y: permCardHeight - 54, width: 120, height: 16)
         permCard.addSubview(axLabel)
 
         let axDesc = NSTextField(labelWithString: "Required to capture global hotkey and paste transcribed text")
         axDesc.font = NSFont.systemFont(ofSize: 10, weight: .regular)
         axDesc.textColor = .secondaryLabelColor
-        axDesc.frame = NSRect(x: 16, y: permCardHeight - 68, width: 300, height: 14)
+        axDesc.frame = NSRect(x: 16, y: permCardHeight - 70, width: 300, height: 14)
         permCard.addSubview(axDesc)
 
-        axStatusBadge = createBadge(frame: NSRect(x: 334, y: permCardHeight - 62, width: 82, height: 20))
+        axStatusBadge = createBadge(frame: NSRect(x: 334, y: permCardHeight - 64, width: 82, height: 20))
         permCard.addSubview(axStatusBadge)
 
         // Row 2: Microphone
         let micLabel = NSTextField(labelWithString: "Microphone")
         micLabel.font = NSFont.systemFont(ofSize: 12, weight: .medium)
-        micLabel.frame = NSRect(x: 16, y: permCardHeight - 88, width: 120, height: 16)
+        micLabel.frame = NSRect(x: 16, y: permCardHeight - 92, width: 120, height: 16)
         permCard.addSubview(micLabel)
 
         let micDesc = NSTextField(labelWithString: "Required for capturing voice input locally")
         micDesc.font = NSFont.systemFont(ofSize: 10, weight: .regular)
         micDesc.textColor = .secondaryLabelColor
-        micDesc.frame = NSRect(x: 16, y: permCardHeight - 104, width: 300, height: 14)
+        micDesc.frame = NSRect(x: 16, y: permCardHeight - 108, width: 300, height: 14)
         permCard.addSubview(micDesc)
 
-        micStatusBadge = createBadge(frame: NSRect(x: 334, y: permCardHeight - 98, width: 82, height: 20))
+        micStatusBadge = createBadge(frame: NSRect(x: 334, y: permCardHeight - 102, width: 82, height: 20))
         permCard.addSubview(micStatusBadge)
+
+        // Banner: Explains that macOS requires a relaunch to bind permissions
+        axHintLabel = NSTextField(labelWithString: "")
+        axHintLabel.font = NSFont.systemFont(ofSize: 10, weight: .medium)
+        axHintLabel.frame = NSRect(x: 16, y: 8, width: 400, height: 16)
+        permCard.addSubview(axHintLabel)
 
         currentY -= (permCardHeight + 8)
 
@@ -242,7 +258,7 @@ public final class SettingsWindowController: NSWindowController {
         revealBtn.action = #selector(revealInFinderClicked)
         contentView.addSubview(revealBtn)
 
-        currentY -= (24 + 12)
+        currentY -= (24 + 10)
 
         // CARD 3: Quick Guide / Global Shortcut
         let shortcutCardHeight: CGFloat = 46
@@ -436,6 +452,10 @@ public final class SettingsWindowController: NSWindowController {
         updatePermissionsStatus()
     }
 
+    @objc private func relaunchClicked() {
+        Permissions.shared.relaunchApp()
+    }
+
     @objc private func revealInFinderClicked() {
         Permissions.shared.revealInFinder()
     }
@@ -448,5 +468,15 @@ public final class SettingsWindowController: NSWindowController {
 
         setBadgeState(axStatusBadge, isGranted: ax)
         setBadgeState(micStatusBadge, isGranted: mic)
+
+        if ax {
+            axHintLabel?.stringValue = "✓ Accessibility active. Double-tap ⌃ to dictate."
+            axHintLabel?.textColor = NSColor(calibratedRed: 0.16, green: 0.78, blue: 0.35, alpha: 1.0)
+            relaunchBtn?.isHidden = true
+        } else {
+            axHintLabel?.stringValue = "💡 Toggled ON in System Settings? Click 'Relaunch Plume' to apply."
+            axHintLabel?.textColor = .systemOrange
+            relaunchBtn?.isHidden = false
+        }
     }
 }

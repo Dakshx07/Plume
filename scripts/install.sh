@@ -106,14 +106,18 @@ fi
 
 chmod +x "$APP_BUNDLE/Contents/MacOS/Plume"
 
-# 7. Code Signing
+# Reset stale TCC database entries so macOS doesn't reject updated binaries as ghost permissions
+tccutil reset Accessibility com.dakshhiran.Plume 2>/dev/null || true
+tccutil reset ListenEvent com.dakshhiran.Plume 2>/dev/null || true
+
+# 7. Code Signing with persistent designated requirement
 DEV_ID=$(security find-identity -p codesigning -v 2>/dev/null | grep "Apple Development" | head -n 1 | awk -F'"' '{print $2}' || true)
 if [ -n "$DEV_ID" ]; then
     echo -e "  Signing with Developer Certificate: $DEV_ID"
     codesign --force --deep --sign "$DEV_ID" --identifier "com.dakshhiran.Plume" "$APP_BUNDLE"
 else
-    echo -e "  Signing with standard ad-hoc signature..."
-    codesign --force --deep --sign - --identifier "com.dakshhiran.Plume" "$APP_BUNDLE"
+    echo -e "  Signing with persistent designated requirement..."
+    codesign --force --deep -s - --identifier "com.dakshhiran.Plume" -r='designated => identifier "com.dakshhiran.Plume"' "$APP_BUNDLE"
 fi
 touch "$APP_BUNDLE"
 
@@ -157,7 +161,8 @@ echo -e "${GREEN}${BOLD}✓ Plume successfully installed and launched!${RESET}"
 echo -e "${GREEN}${BOLD}═══════════════════════════════════════════════════════${RESET}"
 echo ""
 echo -e "${BOLD}Next Steps:${RESET}"
-echo -e "1. ${CYAN}Permissions:${RESET} When macOS asks, allow ${BOLD}Accessibility${RESET} & ${BOLD}Input Monitoring${RESET} in System Settings."
+echo -e "1. ${CYAN}Permissions:${RESET} When macOS asks, allow ${BOLD}Accessibility${RESET} in System Settings."
+echo -e "   (If you just toggled Plume ON in System Settings, click ${BOLD}'Relaunch Plume'${RESET} in Plume Settings to apply!)"
 echo -e "2. ${CYAN}To Dictate:${RESET} Press ${BOLD}Control twice (⌃ ⌃)${RESET} anywhere, speak, and tap ${BOLD}⌃${RESET} once to type!"
 echo -e "3. ${CYAN}Menu Bar:${RESET} Look for Flow the Bot mascot in your top menu bar."
 echo ""
